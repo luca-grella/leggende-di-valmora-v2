@@ -3,6 +3,7 @@
 // streams the neighbour islands in progressively as the player approaches (far ones are cheap
 // low-poly silhouettes), builds interiors and caves lazily in far pockets, applies the day/night
 // lighting, tracks the current area and implements the World API (docs/ARCHITECTURE.md).
+import { createContactShadows } from './contact.js';
 import * as THREE from 'three';
 import { ISLANDS, AREAS, TOWNS, ROUTES, FERRIES, GATES, INTERIORS, POIS, LAYOUT, poiId } from './map.js';
 import { colorsFor } from './palette.js';
@@ -704,7 +705,9 @@ export async function init(ctx) {
       beacon.g.scale.set(1, clamp(pd / 12, 0.25, 1), 1);
     }
   }
+  const contact = createContactShadows(ctx, world);
   ctx.loop.add(tick, ctx.ORDER.world);
+  ctx.loop.add(() => contact.update(), ctx.ORDER.camera + 2);   // after actors and camera: blobs follow the final poses
 
   // ------------------------------------------------------------------------------------------------
   // Start: build the island the player stands on (or Alba) right away

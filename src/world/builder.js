@@ -3,7 +3,9 @@
 // then merged per material and per spatial cell, so a whole town costs a handful of draw calls.
 // A soft contact darkening near the ground is baked into the vertex colours (cheap fake AO).
 import * as THREE from 'three';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, clamp, smoothstep, lerp } from '../core/math.js';
+import { SURF } from '../core/surfaces.js';
 
 const CELL = 48;
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Euler(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
@@ -20,15 +22,19 @@ function flat(geo) {
   }
   return f;
 }
-/** Concatenate {pos, nor, col} parts into one BufferGeometry. */
+/** Concatenate {pos, nor, col, srf} parts into one BufferGeometry (aSurf = surface layer + 1, 0 = plain). */
 function concat(list) {
   let n = 0; for (const p of list) n += p.pos.length;
-  const pos = new Float32Array(n), nor = new Float32Array(n), col = new Float32Array(n);
-  let o = 0; for (const p of list) { pos.set(p.pos, o); nor.set(p.nor, o); col.set(p.col, o); o += p.pos.length; }
+  const pos = new Float32Array(n), nor = new Float32Array(n), col = new Float32Array(n), srf = new Float32Array(n / 3);
+  let o = 0, anySurf = false;
+  for (const p of list) { pos.set(p.pos, o); nor.set(p.nor, o); col.set(p.col, o); if (p.srf) { srf.fill(p.srf, o / 3, (o + p.pos.length) / 3); anySurf = true; } o += p.pos.length; }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('aSurf', new THREE.BufferAttribute(anySurf ? srf : new Float32Array(n / 3), 1));
   return g;
 }
+/** Surface name → aSurf value (layer + 1), 0 when none. */
+export const surfId = name => (name && name in SURF ? SURF[name] + 1 : 0);
 const GEO = new Map();   // shared template geometries (never disposed)
 
 /** Rounded box centred at the origin with smooth normals (seg 1 = cheap). */
@@ -83,6 +89,35 @@ export function smoothSphere(detail = 1) {
   return g;
 }
 
+/** Lumpy foliage blob: icosphere (detail 2) with leaf-cluster bulges; normals half radial (soft toon shading). */
+export function lumpySphere(seed = 1) {
+  const k = 'lumpy' + seed;
+  if (GEO.has(k)) return GEO.get(k);
+  const R = rng('lumpy' + seed);
+  const dirs = [];
+  for (let i = 0; i < 16; i++) { const v = new THREE.Vector3(R() * 2 - 1, R() * 1.6 - 0.5, R() * 2 - 1).normalize(); dirs.push([v, 0.1 + R() * 0.14, 5 + R() * 6]); }
+  let g = new THREE.IcosahedronGeometry(1, 2);
+  g.deleteAttribute('normal'); g.deleteAttribute('uv');
+  g = mergeVertices(g);
+  const p = g.attributes.position, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize();
+    let r = 0.9;
+    for (const [d, a, e] of dirs) r += a * Math.pow(Math.max(0, v.dot(d)), e);
+    r += (R() - 0.5) * 0.03;
+    p.setXYZ(i, v.x * r, v.y * r, v.z * r);
+  }
+  g.computeVertexNormals();
+  const n = g.attributes.normal;
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize();
+    const nx = n.getX(i) * 0.4 + v.x * 0.6, ny = n.getY(i) * 0.4 + v.y * 0.6, nz = n.getZ(i) * 0.4 + v.z * 0.6, l = Math.hypot(nx, ny, nz) || 1;
+    n.setXYZ(i, nx / l, ny / l, nz / l);
+  }
+  GEO.set(k, g);
+  return g;
+}
+
 export function shared(key, make) { if (!GEO.has(key)) { const g = make(); g.deleteAttribute?.('uv'); GEO.set(key, g); } return GEO.get(key); }
 
 export class Builder {
@@ -99,6 +134,8 @@ export class Builder {
     this.jitter = 0.04;
     this.noShadow = false;
     this.aoOn = o.ao ?? true;
+    /** Default surface layer for following parts (see src/core/surfaces.js), e.g. b.surf = 'wood'. */
+    this.surf = null;
   }
   get M() { return this.stack[this.stack.length - 1]; }
   push(x = 0, y = 0, z = 0, ry = 0, s = 1, rx = 0, rz = 0) {
@@ -155,7 +192,7 @@ export class Builder {
     }
     const key = this._key(mat, e[12], e[14]);
     if (!this.parts.has(key)) this.parts.set(key, { mat, list: [], shadow: !this.noShadow && !t.noShadow, ao: t.ao ?? this.aoOn });
-    this.parts.get(key).list.push({ pos, nor, col });
+    this.parts.get(key).list.push({ pos, nor, col, srf: surfId(t.surf ?? this.surf) });
     return this;
   }
 
@@ -177,7 +214,7 @@ export class Builder {
   }
   sphere(r, x, y, z, color, t = {}) {
     const d = t.detail ?? 1;
-    const geo = shared(`s${d}`, () => smoothSphere(d));
+    const geo = t.lumpy ? lumpySphere(t.lumpy) : shared(`s${d}`, () => smoothSphere(d));
     return this.add(geo, color, { ...t, x, y, z, sx: r * (t.sx ?? 1), sy: r * (t.sy ?? 1), sz: r * (t.sz ?? 1) });
   }
   dome(r, x, y, z, color, t = {}) {   // half sphere, flat bottom
@@ -186,7 +223,7 @@ export class Builder {
   }
   rock(r, x, y, z, color, t = {}) {
     const v = t.variant ?? Math.floor(this.R() * 6);
-    return this.add(rockGeometry(100 + v, t.detail ?? 1), color, { ...t, x, y, z, sx: r * (t.sx ?? 1), sy: r * (t.sy ?? 1), sz: r * (t.sz ?? 1) });
+    return this.add(rockGeometry(100 + v, t.detail ?? 1), color, { surf: 'rock', ...t, x, y, z, sx: r * (t.sx ?? 1), sy: r * (t.sy ?? 1), sz: r * (t.sz ?? 1) });
   }
   torus(r, tube, x, y, z, color, t = {}) {
     const geo = shared(`t${r}_${tube}_${t.arc || 'f'}`, () => new THREE.TorusGeometry(r, tube, 6, 16, t.arc || Math.PI * 2));

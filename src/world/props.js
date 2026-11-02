@@ -15,8 +15,8 @@ export function addProp(b, p, heightAt, C = {}) {
   const R = rng('prop' + Math.round(p.x * 10) + ',' + Math.round(p.z * 10));
   switch (p.type) {
     case 'bench':
-      b.box(1.7, 0.1, 0.5, 0, 0.45, 0, WOOD3, { round: 0.04 });
-      b.box(1.7, 0.45, 0.08, 0, 0.78, -0.24, WOOD3, { round: 0.04, rx: -0.12 });
+      b.box(1.7, 0.1, 0.5, 0, 0.45, 0, WOOD3, { surf: 'wood', round: 0.04 });
+      b.box(1.7, 0.45, 0.08, 0, 0.78, -0.24, WOOD3, { surf: 'wood', round: 0.04, rx: -0.12 });
       for (const s of [-1, 1]) { b.box(0.1, 0.45, 0.45, s * 0.72, 0.22, 0, IRON, { round: 0.03 }); b.box(0.08, 0.5, 0.08, s * 0.72, 0.72, -0.24, IRON); }
       b.rect(0, 0, 0.85, 0.3);
       break;
@@ -37,40 +37,40 @@ export function addProp(b, p, heightAt, C = {}) {
       break;
     case 'stall': {
       const col = p.color || '#e8674a';
-      b.box(2.6, 0.9, 1.1, 0, 0.45, 0.2, WOOD3, { round: 0.06 });
-      b.box(2.7, 0.1, 1.2, 0, 0.92, 0.2, WOOD, { round: 0.03 });
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.cyl(0.05, 0.05, 2.3, sx * 1.25, 1.15, sz * 0.6 + 0.2, WOOD2, { seg: 5 });
+      b.box(2.6, 0.9, 1.1, 0, 0.45, 0.2, WOOD3, { surf: 'wood', round: 0.06 });
+      b.box(2.7, 0.1, 1.2, 0, 0.92, 0.2, WOOD, { surf: 'wood', round: 0.03 });
+      for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.cyl(0.05, 0.05, 2.3, sx * 1.25, 1.15, sz * 0.6 + 0.2, WOOD2, { surf: 'wood', seg: 5 });
       for (let k = 0; k < 6; k++) b.box(2.9 / 6 + 0.01, 0.1, 1.7, -1.45 + (k + 0.5) * 2.9 / 6, 2.35, 0.3, k % 2 ? WHITE : col, { rx: 0.2, round: 0.03 });
       for (let k = 0; k < 6; k++) b.sphere(0.24, -1.45 + (k + 0.5) * 2.9 / 6, 2.1, 1.14, k % 2 ? WHITE : col, { sy: 0.5, sz: 0.4 });
       const fruit = ['#ff5f5f', '#ffd23f', '#ff9a3c', '#7fc24a', '#b48cff'];
-      for (let k = 0; k < 4; k++) { b.box(0.55, 0.16, 0.45, -0.95 + k * 0.63, 1.03, 0.25, WOOD2, { round: 0.03 }); for (let j = 0; j < 4; j++) b.sphere(0.1, -1.1 + k * 0.63 + (j % 2) * 0.22, 1.18, 0.15 + (j >> 1) * 0.2, fruit[(k + j) % 5]); }
+      for (let k = 0; k < 4; k++) { b.box(0.55, 0.16, 0.45, -0.95 + k * 0.63, 1.03, 0.25, WOOD2, { surf: 'wood', round: 0.03 }); for (let j = 0; j < 4; j++) b.sphere(0.1, -1.1 + k * 0.63 + (j % 2) * 0.22, 1.18, 0.15 + (j >> 1) * 0.2, fruit[(k + j) % 5]); }
       b.rect(0, 0.2, 1.35, 0.6);
       break;
     }
     case 'sign':
-      b.cyl(0.07, 0.08, 1.4, -0.55, 0.7, 0, WOOD2, { seg: 6 }); b.cyl(0.07, 0.08, 1.4, 0.55, 0.7, 0, WOOD2, { seg: 6 });
-      b.box(1.5, 0.75, 0.12, 0, 1.15, 0.02, WOOD3, { round: 0.1 });
+      b.cyl(0.07, 0.08, 1.4, -0.55, 0.7, 0, WOOD2, { surf: 'wood', seg: 6 }); b.cyl(0.07, 0.08, 1.4, 0.55, 0.7, 0, WOOD2, { surf: 'wood', seg: 6 });
+      b.box(1.5, 0.75, 0.12, 0, 1.15, 0.02, WOOD3, { surf: 'wood', round: 0.1 });
       b.box(1.28, 0.53, 0.04, 0, 1.15, 0.09, '#f5e6c8', { round: 0.06 });
       for (let k = 0; k < 3; k++) b.box(0.9 - k * 0.2, 0.06, 0.02, -0.1 + k * 0.05, 1.28 - k * 0.12, 0.12, '#8a6a4a');
       b.circle(0, 0, 0.4);
       break;
     case 'mailbox':
-      b.cyl(0.05, 0.05, 1.0, 0, 0.5, 0, WOOD2, { seg: 5 });
+      b.cyl(0.05, 0.05, 1.0, 0, 0.5, 0, WOOD2, { surf: 'wood', seg: 5 });
       b.box(0.36, 0.32, 0.5, 0, 1.12, 0, '#e8474a', { round: 0.14 });
       b.box(0.04, 0.18, 0.12, 0.2, 1.25, -0.1, '#ffd23f');
       b.circle(0, 0, 0.22);
       break;
     case 'barrel':
-      b.cyl(0.38, 0.34, 0.9, 0, 0.45, 0, WOOD, { seg: 10, grad: 0.2 });
+      b.cyl(0.38, 0.34, 0.9, 0, 0.45, 0, WOOD, { surf: 'wood', seg: 10, grad: 0.2 });
       b.torus(0.37, 0.035, 0, 0.2, 0, IRON, { rx: Math.PI / 2 }); b.torus(0.37, 0.035, 0, 0.72, 0, IRON, { rx: Math.PI / 2 });
-      b.cyl(0.33, 0.33, 0.04, 0, 0.9, 0, WOOD2, { seg: 10 });
+      b.cyl(0.33, 0.33, 0.04, 0, 0.9, 0, WOOD2, { surf: 'wood', seg: 10 });
       b.circle(0, 0, 0.42);
       break;
     case 'crates':
-      b.box(0.85, 0.75, 0.85, 0, 0.37, 0, WOOD3, { round: 0.05 });
-      b.box(0.9, 0.08, 0.08, 0, 0.37, 0.43, WOOD2, { rz: 0.7 });
-      b.box(0.65, 0.6, 0.65, 0.1, 1.05, 0.05, WOOD, { round: 0.05, ry: 0.4 });
-      b.box(0.7, 0.55, 0.7, 0.85, 0.27, -0.2, WOOD3, { round: 0.05, ry: -0.3 });
+      b.box(0.85, 0.75, 0.85, 0, 0.37, 0, WOOD3, { surf: 'wood', round: 0.05 });
+      b.box(0.9, 0.08, 0.08, 0, 0.37, 0.43, WOOD2, { surf: 'wood', rz: 0.7 });
+      b.box(0.65, 0.6, 0.65, 0.1, 1.05, 0.05, WOOD, { surf: 'wood', round: 0.05, ry: 0.4 });
+      b.box(0.7, 0.55, 0.7, 0.85, 0.27, -0.2, WOOD3, { surf: 'wood', round: 0.05, ry: -0.3 });
       b.rect(0.35, 0, 0.85, 0.55);
       break;
     case 'railing': {
@@ -90,7 +90,7 @@ export function addProp(b, p, heightAt, C = {}) {
     }
     case 'campfire':
       for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; b.rock(0.2, Math.sin(a) * 0.6, 0.08, Math.cos(a) * 0.6, '#8a8494', { variant: k }); }
-      for (let k = 0; k < 4; k++) b.cyl(0.07, 0.07, 0.9, 0, 0.15, 0, WOOD2, { ry: k * 0.8, rz: Math.PI / 2 - 0.25, seg: 5 });
+      for (let k = 0; k < 4; k++) b.cyl(0.07, 0.07, 0.9, 0, 0.15, 0, WOOD2, { surf: 'wood', ry: k * 0.8, rz: Math.PI / 2 - 0.25, seg: 5 });
       b.cone(0.3, 0.75, 0, 0.5, 0, '#ff8a3c', { mat: 'glowAlways', seg: 7 });
       b.cone(0.16, 0.5, 0.06, 0.48, 0.02, '#ffe07a', { mat: 'glowAlways', seg: 6 });
       b.glow(0, 0.6, 0, '#ff9a4a', 2, 'fire');
@@ -135,7 +135,7 @@ export function addProp(b, p, heightAt, C = {}) {
       b.cone(2.0, 2.2, 0, 7.1, 0, '#e8674a', { seg: 10 });
       b.box(0.9, 1.6, 0.1, 0, 0.8, 1.92, '#b97b47', { round: 0.3 });
       b.push(0, 6.2, 2.1, 0, 1, 0, p.spin || 0.3);
-      for (let k = 0; k < 4; k++) { b.push(0, 0, 0, 0, 1, 0, k * Math.PI / 2); b.box(0.18, 3.4, 0.08, 0, 1.8, 0, WOOD2); b.box(0.9, 2.6, 0.04, 0.5, 2.0, 0, '#fff8ee', { round: 0.04 }); b.pop(); }
+      for (let k = 0; k < 4; k++) { b.push(0, 0, 0, 0, 1, 0, k * Math.PI / 2); b.box(0.18, 3.4, 0.08, 0, 1.8, 0, WOOD2, { surf: 'wood' }); b.box(0.9, 2.6, 0.04, 0.5, 2.0, 0, '#fff8ee', { round: 0.04 }); b.pop(); }
       b.sphere(0.3, 0, 0, 0, '#e8674a');
       b.pop();
       b.circle(0, 0, 2.0);
@@ -161,9 +161,9 @@ export function addProp(b, p, heightAt, C = {}) {
     case 'boat': {
       const col = p.color || '#3fa6d9';
       b.box(1.5, 0.55, 3.6, 0, 0.28, 0, col, { round: 0.26 });
-      b.box(1.25, 0.12, 3.2, 0, 0.5, 0, WOOD3, { round: 0.05 });
+      b.box(1.25, 0.12, 3.2, 0, 0.5, 0, WOOD3, { surf: 'wood', round: 0.05 });
       b.cone(0.75, 1.0, 0, 0.28, 2.1, col, { rx: Math.PI / 2, seg: 8, sx: 1, sz: 0.55 });
-      b.box(1.4, 0.1, 0.25, 0, 0.62, -0.5, WOOD, { round: 0.03 });
+      b.box(1.4, 0.1, 0.25, 0, 0.62, -0.5, WOOD, { surf: 'wood', round: 0.03 });
       break;
     }
     case 'bollard':
@@ -206,8 +206,8 @@ export function addProp(b, p, heightAt, C = {}) {
       break;
     }
     case 'picnic':
-      b.box(1.8, 0.08, 0.9, 0, 0.75, 0, WOOD3, { round: 0.04 });
-      for (const s of [-1, 1]) { b.box(1.8, 0.06, 0.32, 0, 0.45, s * 0.75, WOOD3, { round: 0.03 }); b.box(0.08, 0.75, 1.7, s * 0.75, 0.37, 0, WOOD2, { rz: 0 }); }
+      b.box(1.8, 0.08, 0.9, 0, 0.75, 0, WOOD3, { surf: 'wood', round: 0.04 });
+      for (const s of [-1, 1]) { b.box(1.8, 0.06, 0.32, 0, 0.45, s * 0.75, WOOD3, { surf: 'wood', round: 0.03 }); b.box(0.08, 0.75, 1.7, s * 0.75, 0.37, 0, WOOD2, { surf: 'wood', rz: 0 }); }
       b.rect(0, 0, 0.95, 0.95);
       break;
     default:
@@ -245,7 +245,7 @@ export function addBridge(b, br, heightAt) {
       while (next < s1) {
         const t = (next - s0) / (s1 - s0), x = ax + dx * t, z = az + dz * t, y = y0 + (y1 - y0) * t;
         b.at(x, z).push(x, y, z, ry, 1, -pitch);
-        b.box(hw * 2 + 0.2, 0.12, br.kind === 'rope' ? 0.38 : 0.46, 0, -0.06, 0, (Math.round(next * 2) % 3) ? col : WOOD, { round: 0.03, jitter: 0.08 });
+        b.box(hw * 2 + 0.2, 0.12, br.kind === 'rope' ? 0.38 : 0.46, 0, -0.06, 0, (Math.round(next * 2) % 3) ? col : WOOD, { surf: 'wood', round: 0.03, jitter: 0.08 });
         b.pop();
         next += br.kind === 'rope' ? 0.55 : 0.5;
       }
@@ -253,8 +253,8 @@ export function addBridge(b, br, heightAt) {
         const t = (postNext - s0) / (s1 - s0), x = ax + dx * t, z = az + dz * t, y = y0 + (y1 - y0) * t;
         b.at(x, z).push(x, y, z, ry);
         for (const s of [-1, 1]) {
-          b.cyl(0.08, 0.09, br.kind === 'rope' ? 1.1 : 1.0, s * (hw + 0.1), 0.5, 0, WOOD2, { seg: 6 });
-          if (br.kind !== 'rope') { const deep = y - Math.min(heightAt(x, z), -0.5) + 0.3; b.cyl(0.14, 0.14, deep, s * (hw - 0.1), -deep / 2, 0, WOOD2, { seg: 6 }); }
+          b.cyl(0.08, 0.09, br.kind === 'rope' ? 1.1 : 1.0, s * (hw + 0.1), 0.5, 0, WOOD2, { surf: 'wood', seg: 6 });
+          if (br.kind !== 'rope') { const deep = y - Math.min(heightAt(x, z), -0.5) + 0.3; b.cyl(0.14, 0.14, deep, s * (hw - 0.1), -deep / 2, 0, WOOD2, { surf: 'wood', seg: 6 }); }
         }
         b.pop();
         postNext += br.kind === 'rope' ? 3.5 : 2.8;
@@ -263,8 +263,8 @@ export function addBridge(b, br, heightAt) {
       b.at((ax + bx) / 2, (az + bz) / 2).push((ax + bx) / 2, (y0 + y1) / 2, (az + bz) / 2, ry, 1, -pitch);
       for (const s of [-1, 1]) {
         if (br.kind === 'rope') { b.cyl(0.035, 0.035, l + 0.05, s * (hw + 0.1), 0.95, 0, '#e2c890', { rx: Math.PI / 2, seg: 4 }); b.cyl(0.03, 0.03, l + 0.05, s * (hw + 0.1), 0.5, 0, '#e2c890', { rx: Math.PI / 2, seg: 4 }); }
-        else { b.box(0.12, 0.1, l + 0.06, s * (hw + 0.1), 0.98, 0, WOOD, { round: 0.03 }); b.box(0.08, 0.08, l + 0.06, s * (hw + 0.1), 0.55, 0, WOOD, { round: 0.02 }); }
-        if (br.kind !== 'rope') b.box(0.18, 0.3, l + 0.05, s * (hw - 0.05), -0.25, 0, WOOD2, {});   // stringers
+        else { b.box(0.12, 0.1, l + 0.06, s * (hw + 0.1), 0.98, 0, WOOD, { surf: 'wood', round: 0.03 }); b.box(0.08, 0.08, l + 0.06, s * (hw + 0.1), 0.55, 0, WOOD, { surf: 'wood', round: 0.02 }); }
+        if (br.kind !== 'rope') b.box(0.18, 0.3, l + 0.05, s * (hw - 0.05), -0.25, 0, WOOD2, { surf: 'wood' });   // stringers
       }
       b.pop();
     }
@@ -287,9 +287,9 @@ export function addDock(b, d) {
   const ry = d.facing, len = d.len, hw = d.w / 2, y = d.y;
   const cx = (d.x + d.endX) / 2, cz = (d.z + d.endZ) / 2;
   b.at(cx, cz).push(cx, y, cz, ry);
-  for (let k = 0; k < Math.round(len / 0.5); k++) b.box(d.w, 0.14, 0.44, 0, -0.07, -len / 2 + 0.25 + k * 0.5, k % 4 ? WOOD3 : WOOD, { round: 0.03, jitter: 0.08 });
-  for (let k = 0; k <= Math.round(len / 3); k++) for (const s of [-1, 1]) b.cyl(0.15, 0.15, y + 2.6, s * (hw - 0.05), -(y + 2.6) / 2 + 0.25, -len / 2 + k * len / Math.round(len / 3), WOOD2, { seg: 7 });
-  for (const s of [-1, 1]) b.box(0.18, 0.2, len, s * (hw + 0.02), -0.18, 0, WOOD2);
+  for (let k = 0; k < Math.round(len / 0.5); k++) b.box(d.w, 0.14, 0.44, 0, -0.07, -len / 2 + 0.25 + k * 0.5, k % 4 ? WOOD3 : WOOD, { surf: 'wood', round: 0.03, jitter: 0.08 });
+  for (let k = 0; k <= Math.round(len / 3); k++) for (const s of [-1, 1]) b.cyl(0.15, 0.15, y + 2.6, s * (hw - 0.05), -(y + 2.6) / 2 + 0.25, -len / 2 + k * len / Math.round(len / 3), WOOD2, { surf: 'wood', seg: 7 });
+  for (const s of [-1, 1]) b.box(0.18, 0.2, len, s * (hw + 0.02), -0.18, 0, WOOD2, { surf: 'wood' });
   for (const s of [-1, 1]) { b.push(s * (hw - 0.3), 0, len / 2 - 1.0); addProp(b, { type: 'bollard', x: 0, z: 0, y: 0 }, () => 0); b.pop(); }
   b.push(hw - 0.3, 0, len / 2 - 4); addProp(b, { type: 'lamp', x: 0, z: 0, y: 0 }, () => 0); b.pop();
   b.push(-hw - 1.3, -y + 0.05, len / 2 - 4, 0.15); addProp(b, { type: 'boat', x: 0, z: 0, y: 0, color: '#e8674a' }, () => 0); b.pop();

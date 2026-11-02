@@ -26,8 +26,8 @@ function furniture(b, f, I, R, C) {
   switch (f.type) {
     case 'bed': {
       const quilt = R.pick(pal);
-      b.box(2.0, 0.35, 2.3, 0, 0.2, 0, WOOD, { round: 0.08 });
-      b.box(2.05, 1.2, 0.18, 0, 0.6, -1.1, WOOD2, { round: 0.1 });
+      b.box(2.0, 0.35, 2.3, 0, 0.2, 0, WOOD, { surf: 'wood', round: 0.08 });
+      b.box(2.05, 1.2, 0.18, 0, 0.6, -1.1, WOOD2, { surf: 'wood', round: 0.1 });
       b.box(1.9, 0.28, 2.15, 0, 0.5, 0.05, WHITE, { round: 0.12 });
       b.box(1.95, 0.18, 1.45, 0, 0.66, 0.42, quilt, { round: 0.1 });
       b.box(1.97, 0.12, 0.3, 0, 0.7, -0.33, WHITE, { round: 0.06 });
@@ -36,7 +36,7 @@ function furniture(b, f, I, R, C) {
       break;
     }
     case 'nightstand':
-      b.box(0.6, 0.6, 0.5, 0, 0.3, 0, WOOD3, { round: 0.06 }); b.box(0.5, 0.18, 0.04, 0, 0.4, 0.25, WOOD, {}); out.push([0, 0, 0.3, 0.25]);
+      b.box(0.6, 0.6, 0.5, 0, 0.3, 0, WOOD3, { surf: 'wood', round: 0.06 }); b.box(0.5, 0.18, 0.04, 0, 0.4, 0.25, WOOD, { surf: 'wood' }); out.push([0, 0, 0.3, 0.25]);
       break;
     case 'lamp':
       b.cyl(0.12, 0.14, 0.12, 0, f.onTop ? 0.66 : 0.06, 0, '#e6dccb', { seg: 8 });
@@ -44,14 +44,14 @@ function furniture(b, f, I, R, C) {
       b.cyl(0.14, 0.22, 0.25, 0, f.onTop ? 1.08 : 1.2, 0, '#fff2c8', { mat: 'glow', seg: 10, open: false });
       break;
     case 'wardrobe':
-      b.box(1.6, 2.1, 0.7, 0, 1.05, 0, WOOD3, { round: 0.08 });
-      b.box(0.02, 1.8, 0.04, 0, 1.05, 0.36, WOOD2); for (const s of [-1, 1]) b.sphere(0.05, s * 0.12, 1.1, 0.38, '#ffd23f');
-      b.box(1.66, 0.12, 0.76, 0, 2.12, 0, WOOD2, { round: 0.04 });
+      b.box(1.6, 2.1, 0.7, 0, 1.05, 0, WOOD3, { surf: 'wood', round: 0.08 });
+      b.box(0.02, 1.8, 0.04, 0, 1.05, 0.36, WOOD2, { surf: 'wood' }); for (const s of [-1, 1]) b.sphere(0.05, s * 0.12, 1.1, 0.38, '#ffd23f');
+      b.box(1.66, 0.12, 0.76, 0, 2.12, 0, WOOD2, { surf: 'wood', round: 0.04 });
       out.push([0, 0, 0.8, 0.35]);
       break;
     case 'drawers':
-      b.box(1.2, 0.85, 0.5, 0, 0.42, 0, WOOD3, { round: 0.06 });
-      for (let k = 0; k < 3; k++) { b.box(1.05, 0.22, 0.04, 0, 0.18 + k * 0.26, 0.25, WOOD, { round: 0.03 }); b.sphere(0.04, 0, 0.18 + k * 0.26, 0.28, '#ffd23f'); }
+      b.box(1.2, 0.85, 0.5, 0, 0.42, 0, WOOD3, { surf: 'wood', round: 0.06 });
+      for (let k = 0; k < 3; k++) { b.box(1.05, 0.22, 0.04, 0, 0.18 + k * 0.26, 0.25, WOOD, { surf: 'wood', round: 0.03 }); b.sphere(0.04, 0, 0.18 + k * 0.26, 0.28, '#ffd23f'); }
       b.cyl(0.1, 0.1, 0.25, 0.35, 0.98, 0, '#7fd0ff', { seg: 8 }); b.sphere(0.12, 0.35, 1.18, 0, '#ff8fb8');
       out.push([0, 0, 0.6, 0.25]);
       break;
@@ -72,9 +72,9 @@ function furniture(b, f, I, R, C) {
       out.push([0, 0, 0.4, 0.35]);
       break;
     case 'table': {
-      b.cyl(0.62, 0.62, 0.08, 0, 0.76, 0, WOOD3, { seg: 16 }); b.cyl(0.08, 0.14, 0.74, 0, 0.37, 0, WOOD2, { seg: 8 });
+      b.cyl(0.62, 0.62, 0.08, 0, 0.76, 0, WOOD3, { surf: 'wood', seg: 16 }); b.cyl(0.08, 0.14, 0.74, 0, 0.37, 0, WOOD2, { surf: 'wood', seg: 8 });
       b.cyl(0.13, 0.11, 0.12, 0.15, 0.86, 0.1, '#ffffff', { seg: 8 }); b.sphere(0.07, -0.2, 0.86, -0.1, '#ff5f5f'); b.sphere(0.07, -0.1, 0.86, -0.18, '#ffd23f');
-      for (const s of [-1, 1]) { b.box(0.45, 0.07, 0.45, s * 0.95, 0.46, 0, WOOD, { round: 0.04 }); b.box(0.45, 0.6, 0.07, s * 0.95 + s * 0.2, 0.75, 0, WOOD, { round: 0.03, ry: Math.PI / 2 }); for (const a of [-1, 1]) for (const c of [-1, 1]) b.box(0.05, 0.44, 0.05, s * 0.95 + a * 0.18, 0.22, c * 0.18, WOOD2); }
+      for (const s of [-1, 1]) { b.box(0.45, 0.07, 0.45, s * 0.95, 0.46, 0, WOOD, { surf: 'wood', round: 0.04 }); b.box(0.45, 0.6, 0.07, s * 0.95 + s * 0.2, 0.75, 0, WOOD, { surf: 'wood', round: 0.03, ry: Math.PI / 2 }); for (const a of [-1, 1]) for (const c of [-1, 1]) b.box(0.05, 0.44, 0.05, s * 0.95 + a * 0.18, 0.22, c * 0.18, WOOD2, { surf: 'wood' }); }
       out.push([0, 0, 0.65, 0.65]);
       break;
     }
@@ -90,9 +90,9 @@ function furniture(b, f, I, R, C) {
     }
     case 'shelf': case 'shelfback': case 'bookshelf': {
       const w = f.type === 'shelfback' ? 2.6 : 1.4;
-      b.box(w, 1.9, 0.42, 0, 0.95, 0, WOOD3, { round: 0.05 });
+      b.box(w, 1.9, 0.42, 0, 0.95, 0, WOOD3, { surf: 'wood', round: 0.05 });
       for (let r = 0; r < 4; r++) {
-        b.box(w - 0.1, 0.05, 0.38, 0, 0.2 + r * 0.45, 0.02, WOOD2, {});
+        b.box(w - 0.1, 0.05, 0.38, 0, 0.2 + r * 0.45, 0.02, WOOD2, { surf: 'wood' });
         for (let k = 0; k < Math.round(w * 4); k++) {
           const cx = -w / 2 + 0.15 + k * 0.24;
           if (f.goods) { if (k % 2 === 0) b.box(0.2, 0.26, 0.24, cx + 0.05, 0.35 + r * 0.45, 0.04, pal[(k + r) % pal.length], { round: 0.04 }); else b.cyl(0.08, 0.08, 0.24, cx, 0.34 + r * 0.45, 0.04, pal[(k * 3 + r) % pal.length], { seg: 8 }); }
@@ -113,14 +113,14 @@ function furniture(b, f, I, R, C) {
       out.push([0, 0, 0.25, 0.25]);
       break;
     case 'tv':
-      b.box(1.4, 0.5, 0.45, 0, 0.25, 0, WOOD3, { round: 0.05 });
+      b.box(1.4, 0.5, 0.45, 0, 0.25, 0, WOOD3, { surf: 'wood', round: 0.05 });
       b.box(1.2, 0.72, 0.08, 0, 0.9, 0, '#2a2a3a', { round: 0.05 }); b.box(1.08, 0.6, 0.02, 0, 0.9, 0.05, '#7fd0ff', { mat: 'glow' });
       b.box(0.5, 0.06, 0.25, 0.3, 0.53, 0.05, '#e8474a', { round: 0.02 });
       out.push([0, 0, 0.7, 0.25]);
       break;
     case 'desk':
-      b.box(1.4, 0.07, 0.7, 0, 0.76, 0, WOOD3, { round: 0.03 });
-      for (const s of [-1, 1]) b.box(0.07, 0.74, 0.65, s * 0.65, 0.37, 0, WOOD2);
+      b.box(1.4, 0.07, 0.7, 0, 0.76, 0, WOOD3, { surf: 'wood', round: 0.03 });
+      for (const s of [-1, 1]) b.box(0.07, 0.74, 0.65, s * 0.65, 0.37, 0, WOOD2, { surf: 'wood' });
       b.box(0.5, 0.35, 0.05, 0.1, 1.0, -0.2, '#3a3a4a', { round: 0.03 }); b.box(0.45, 0.28, 0.02, 0.1, 1.0, -0.17, '#9fe0ff', { mat: 'glow' });
       b.box(0.3, 0.04, 0.22, -0.4, 0.81, 0.05, '#fff8ee', { ry: 0.3 });
       out.push([0, 0, 0.7, 0.35]);
@@ -152,8 +152,8 @@ function furniture(b, f, I, R, C) {
       out.push([0, 0, 0.9, 0.28]);
       break;
     case 'crates':
-      b.box(0.9, 0.8, 0.9, 0, 0.4, 0, WOOD3, { round: 0.05 }); b.box(0.7, 0.6, 0.7, 0.1, 1.1, 0, WOOD, { round: 0.05, ry: 0.3 });
-      b.box(0.95, 0.08, 0.08, 0, 0.4, 0.46, WOOD2, { rz: 0.7 });
+      b.box(0.9, 0.8, 0.9, 0, 0.4, 0, WOOD3, { surf: 'wood', round: 0.05 }); b.box(0.7, 0.6, 0.7, 0.1, 1.1, 0, WOOD, { surf: 'wood', round: 0.05, ry: 0.3 });
+      b.box(0.95, 0.08, 0.08, 0, 0.4, 0.46, WOOD2, { surf: 'wood', rz: 0.7 });
       out.push([0, 0, 0.5, 0.5]);
       break;
     case 'labtable':
@@ -170,23 +170,23 @@ function furniture(b, f, I, R, C) {
     case 'bar': {
       const len = f.len || 6;
       b.box(len, 1.1, 0.8, 0, 0.55, 0, '#8a5a36', { round: 0.1 });
-      b.box(len + 0.1, 0.1, 0.95, 0, 1.12, 0, WOOD3, { round: 0.04 });
+      b.box(len + 0.1, 0.1, 0.95, 0, 1.12, 0, WOOD3, { surf: 'wood', round: 0.04 });
       for (let k = 0; k < 5; k++) { b.cyl(0.2, 0.22, 0.06, -len / 2 + 0.8 + k * (len - 1.6) / 4, 0.75, 0.8, '#e8674a', { seg: 10 }); b.cyl(0.04, 0.04, 0.72, -len / 2 + 0.8 + k * (len - 1.6) / 4, 0.36, 0.8, '#4a4a5e', { seg: 4 }); }
-      b.box(len - 0.6, 1.6, 0.35, 0, 1.6, -1.05, WOOD2, { round: 0.04 });
+      b.box(len - 0.6, 1.6, 0.35, 0, 1.6, -1.05, WOOD2, { surf: 'wood', round: 0.04 });
       for (let k = 0; k < 14; k++) b.cyl(0.06, 0.07, 0.32, -len / 2 + 0.6 + k * (len - 1.2) / 13, 1.95, -0.98, ['#3f8a4a', '#a8203a', '#e8c86a'][k % 3], { seg: 6 });
       out.push([0, 0, len / 2, 0.4]);
       break;
     }
     case 'barrels':
-      for (const [dx, dz] of [[0, 0], [0.75, 0.1], [0.35, 0.65]]) { b.cyl(0.36, 0.32, 0.85, dx, 0.43, dz, WOOD, { seg: 10 }); b.torus(0.35, 0.03, dx, 0.2, dz, '#4a4a5e', { rx: Math.PI / 2 }); b.torus(0.35, 0.03, dx, 0.68, dz, '#4a4a5e', { rx: Math.PI / 2 }); }
+      for (const [dx, dz] of [[0, 0], [0.75, 0.1], [0.35, 0.65]]) { b.cyl(0.36, 0.32, 0.85, dx, 0.43, dz, WOOD, { surf: 'wood', seg: 10 }); b.torus(0.35, 0.03, dx, 0.2, dz, '#4a4a5e', { rx: Math.PI / 2 }); b.torus(0.35, 0.03, dx, 0.68, dz, '#4a4a5e', { rx: Math.PI / 2 }); }
       out.push([0.35, 0.3, 0.75, 0.7]);
       break;
     case 'dtable':
       b.box(1.4, 0.06, 1.0, 0, 0.76, 0, f.cloth || WHITE, { round: 0.03 });
       b.box(1.42, 0.25, 1.02, 0, 0.64, 0, f.cloth || WHITE, { round: 0.02 });
-      b.box(0.1, 0.62, 0.1, 0, 0.31, 0, WOOD2);
+      b.box(0.1, 0.62, 0.1, 0, 0.31, 0, WOOD2, { surf: 'wood' });
       b.cyl(0.05, 0.06, 0.22, 0, 0.9, 0, '#a8203a', { seg: 6 }); b.sphere(0.06, 0.1, 0.84, 0.1, '#ffe07a', { mat: 'glow' });
-      for (const s of [-1, 1]) { b.box(0.42, 0.07, 0.42, s * 0.95, 0.46, 0, WOOD, { round: 0.04 }); b.box(0.07, 0.55, 0.42, s * 1.15, 0.75, 0, WOOD, { round: 0.03 }); }
+      for (const s of [-1, 1]) { b.box(0.42, 0.07, 0.42, s * 0.95, 0.46, 0, WOOD, { surf: 'wood', round: 0.04 }); b.box(0.07, 0.55, 0.42, s * 1.15, 0.75, 0, WOOD, { surf: 'wood', round: 0.03 }); }
       out.push([0, 0, 0.72, 0.52]);
       break;
     case 'stringlights': {
@@ -225,14 +225,14 @@ export function buildInterior(ctx, def, mats) {
   // floor: planks or tiles + a dark plinth under everything
   b.box(w + 3, 0.4, d + 3, 0, -0.26, 0, '#3a2a28', {});
   if (T.tiles) {
-    for (let i = 0; i < Math.ceil(w); i++) for (let j = 0; j < Math.ceil(d); j++) b.box(0.98, 0.1, 0.98, -hw + 0.5 + i, -0.05, -hd + 0.5 + j, (i + j) % 2 ? T.floor : T.floor2, { round: 0.02, jitter: 0.01 });
+    for (let i = 0; i < Math.ceil(w); i++) for (let j = 0; j < Math.ceil(d); j++) b.box(0.98, 0.1, 0.98, -hw + 0.5 + i, -0.05, -hd + 0.5 + j, (i + j) % 2 ? T.floor : T.floor2, { round: 0.02, jitter: 0.01, surf: 'plaster' });
   } else {
-    for (let i = 0; i < Math.ceil(w / 0.5); i++) b.box(0.48, 0.1, d, -hw + 0.25 + i * 0.5, -0.05, 0, i % 3 ? T.floor : T.floor2, { round: 0.02, jitter: 0.05 });
+    for (let i = 0; i < Math.ceil(w / 0.5); i++) b.box(0.48, 0.1, d, -hw + 0.25 + i * 0.5, -0.05, 0, i % 3 ? T.floor : T.floor2, { round: 0.02, jitter: 0.05, surf: 'wood' });
   }
   // walls: back + sides tall, front low with a door gap
   const wallT = 0.3;
-  b.box(w + wallT * 2, H, wallT, 0, H / 2, -hd - wallT / 2, T.wall, { grad: 0.12 });
-  for (const s of [-1, 1]) b.box(wallT, H, d + wallT, s * (hw + wallT / 2), H / 2, -wallT / 2, T.wall, { grad: 0.12 });
+  b.box(w + wallT * 2, H, wallT, 0, H / 2, -hd - wallT / 2, T.wall, { grad: 0.12, surf: 'plaster' });
+  for (const s of [-1, 1]) b.box(wallT, H, d + wallT, s * (hw + wallT / 2), H / 2, -wallT / 2, T.wall, { grad: 0.12, surf: 'plaster' });
   // wainscot + baseboard
   b.box(w, 1.0, 0.06, 0, 0.5, -hd + 0.03, T.wain, {}); b.box(w, 0.08, 0.1, 0, 1.0, -hd + 0.05, WHITE, {});
   for (const s of [-1, 1]) { b.box(0.06, 1.0, d, s * (hw - 0.03), 0.5, 0, T.wain, {}); b.box(0.1, 0.08, d, s * (hw - 0.05), 1.0, 0, WHITE, {}); }
@@ -241,7 +241,7 @@ export function buildInterior(ctx, def, mats) {
   for (const s of [-1, 1]) b.box(wallT + 0.1, 0.16, d + wallT + 0.1, s * (hw + wallT / 2), H + 0.08, -wallT / 2, '#8a6a5a', { round: 0.05 });
   // low front wall with door gap
   const gap = 1.6;
-  for (const s of [-1, 1]) { const len = hw - gap / 2; b.box(len + wallT, 0.55, wallT, s * (gap / 2 + len / 2 + wallT / 2), 0.27, hd + wallT / 2, T.wall, {}); b.box(len + wallT + 0.1, 0.12, wallT + 0.1, s * (gap / 2 + len / 2 + wallT / 2), 0.6, hd + wallT / 2, '#8a6a5a', { round: 0.04 }); }
+  for (const s of [-1, 1]) { const len = hw - gap / 2; b.box(len + wallT, 0.55, wallT, s * (gap / 2 + len / 2 + wallT / 2), 0.27, hd + wallT / 2, T.wall, { surf: 'plaster' }); b.box(len + wallT + 0.1, 0.12, wallT + 0.1, s * (gap / 2 + len / 2 + wallT / 2), 0.6, hd + wallT / 2, '#8a6a5a', { round: 0.04 }); }
   b.box(gap + 0.2, 0.05, 0.9, 0, 0.02, hd + 0.3, '#c8553a', { round: 0.02 });   // doormat
   // back-wall windows (light) with curtains
   for (const xx of [-hw * 0.45, hw * 0.45]) {

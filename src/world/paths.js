@@ -4,22 +4,19 @@
 import * as THREE from 'three';
 import { extendToon } from './mats.js';
 import { GLSL_NOISE } from './terrain.js';
+import { SURF } from '../core/surfaces.js';
 
 const VERT_PARS = 'attribute vec3 aEdge;\nvarying vec3 vEdge;\nvarying vec3 vPW;\n';
 const FRAG = /* glsl */`
   float e = length(vec2(vEdge.x, vEdge.y));
   float n = vnoise(vPW.xz * 0.9) * 0.18 + vnoise(vPW.xz * 3.1) * 0.06;
-  if (e > 0.97 + n - 0.09) discard;
+  // ragged edge follows the texture relief: pebbles and cobbles poke into the grass
+  int pl = vEdge.z > 0.5 ? ${SURF.cobble} : ${SURF.dirt};
+  float th = texture(uSurfCol, vec3(vPW.xz / uSurfScale[pl], float(pl))).a;
+  if (e > 0.97 + n - 0.09 + (th - 0.5) * 0.22) discard;
   vec3 pc = vColor;
-  if (vEdge.z > 0.5) {               // cobbles
-    vec2 q = vPW.xz * vec2(1.4, 1.9); q.x += floor(q.y) * 0.5;
-    vec2 f = fract(q);
-    float grout = smoothstep(0.0, 0.08, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) * 1.4);
-    pc *= mix(0.86, 1.0, grout) * (0.94 + 0.08 * vhash(floor(q)));
-  } else {
-    pc *= 0.93 + 0.1 * vnoise(vPW.xz * 0.5) + 0.04 * step(0.82, vnoise(vPW.xz * 2.3));
-  }
-  pc *= 1.0 - 0.13 * smoothstep(0.78, 0.95, e - n * 0.5);
+  pc *= 0.93 + 0.1 * vnoise(vPW.xz * 0.5) + 0.04 * step(0.82, vnoise(vPW.xz * 2.3));
+  pc *= 1.0 - 0.16 * smoothstep(0.74, 0.95, e - n * 0.5);   // worn darker rim
   diffuseColor.rgb = pc;
 `;
 
@@ -48,7 +45,7 @@ export function buildPaths(ctx, desc) {
     for (const s of T.streets) runs.push({ pts: [[s.ax, s.az], [s.bx, s.bz]], hw: s.w / 2, kind: city, ext: 1.5, round: true });
     for (const s of T.doorPaths) runs.push({ pts: [[s.ax, s.az], [s.bx, s.bz]], hw: s.w / 2, kind: city, ext: 0.6 });
   }
-  const pos = [], nor = [], col = [], edge = [], idx = [];
+  const pos = [], nor = [], col = [], edge = [], idx = [], srf = [];
   const cDirt = new THREE.Color(C.path), cCob = new THREE.Color(C.plaza), c = new THREE.Color();
   const ACROSS = 5;
   for (const r of runs) {
@@ -81,6 +78,7 @@ export function buildPaths(ctx, desc) {
         col.push(c.r, c.g, c.b);
         const dEnd = Math.min(i, sp.length - 1 - i) * segLen;
         edge.push(off / r.hw, r.round ? Math.max(0, 1 - dEnd / r.hw) : 0, r.kind);
+        srf.push((r.kind ? SURF.cobble : SURF.dirt) + 1);
       }
       if (i > 0) for (let k = 0; k < ACROSS - 1; k++) {
         const p0 = base + (i - 1) * ACROSS + k, p1 = base + i * ACROSS + k;
@@ -94,6 +92,7 @@ export function buildPaths(ctx, desc) {
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   geo.setAttribute('aEdge', new THREE.Float32BufferAttribute(edge, 3));
+  geo.setAttribute('aSurf', new THREE.Float32BufferAttribute(srf, 1));
   geo.setIndex(idx);
   // terrain-like normals from the heightfield for correct toon shading on slopes
   const P = geo.attributes.position, Nn = geo.attributes.normal;
@@ -103,7 +102,7 @@ export function buildPaths(ctx, desc) {
     Nn.setXYZ(i, dx / l, 2 * e / l, dz / l);
   }
   geo.computeBoundingSphere();
-  const mat = extendToon(ctx.toon.matUnique('#ffffff', { vertexColors: true }), 'pathribbon', sh => {
+  const mat = extendToon(ctx.toon.matUnique('#ffffff', { vertexColors: true, surf: 'attr' }), 'pathribbon', sh => {
     sh.vertexShader = VERT_PARS + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvEdge = aEdge; vPW = (modelMatrix * vec4(position, 1.0)).xyz;');
     sh.fragmentShader = 'varying vec3 vEdge;\nvarying vec3 vPW;\n' + sh.fragmentShader
       .replace('#include <common>', '#include <common>\n' + GLSL_NOISE)

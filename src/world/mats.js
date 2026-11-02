@@ -64,7 +64,7 @@ export function createWorldMats(ctx) {
   const emissiveFromColor = sh => {
     sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR\n totalEmissiveRadiance *= vColor;\n#endif');
   };
-  const solid = T.matVC();
+  const solid = T.matVC({ surf: 'attr' });   // surface detail from the builder's aSurf attribute
   // windows: pale glass by day, warm light at night (emissive driven by lamps)
   const windows = extendToon(T.matUnique('#ffffff', { vertexColors: true, emissive: '#ffc867', emissiveIntensity: 0 }), 'win', () => {});
   // bulbs, lanterns, crystals: emissive = vertex colour × intensity
@@ -77,7 +77,7 @@ export function createWorldMats(ctx) {
   function wind(sway = 0.012, base = 0.4, o = {}) {
     const key = `${sway}|${base}|${o.side || 0}`;
     if (windCache.has(key)) return windCache.get(key);
-    const m = T.matUnique('#ffffff', { vertexColors: true, side: o.side ?? THREE.FrontSide });
+    const m = T.matUnique('#ffffff', { vertexColors: true, side: o.side ?? THREE.FrontSide, surf: 'attr' });
     const U = { uSway: { value: sway }, uSwayBase: { value: base } };
     extendToon(m, 'wind', sh => {
       Object.assign(sh.uniforms, WIND, U, OCCLUDE);

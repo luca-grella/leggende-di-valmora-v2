@@ -33,10 +33,10 @@ function frame(b, def, heightAt) {
 
 function door(b, x, z, y, col, { w = 1.1, h = 2.0, frameCol = TRIM, round = true, awning = null, step = true } = {}) {
   b.box(w + 0.32, h + 0.2, 0.14, x, y + h / 2 + 0.05, z + 0.02, frameCol, { round: 0.06 });
-  b.box(w, h, 0.16, x, y + h / 2, z + 0.06, col, { round: round ? 0.12 : 0.03 });
+  b.box(w, h, 0.16, x, y + h / 2, z + 0.06, col, { round: round ? 0.12 : 0.03, surf: 'wood' });
   b.box(w * 0.36, h * 0.22, 0.04, x - w * 0.2, y + h * 0.66, z + 0.15, GLASS, { mat: 'windows', round: 0.04 });
   b.sphere(0.06, x + w * 0.32, y + h * 0.48, z + 0.17, '#ffd23f');
-  if (step) b.box(w + 0.6, 0.18, 0.7, x, y + 0.09, z + 0.35, '#e6dccb', { round: 0.06 });
+  if (step) b.box(w + 0.6, 0.18, 0.7, x, y + 0.09, z + 0.35, '#e6dccb', { round: 0.06, surf: 'stone' });
   if (awning) b.box(w + 0.7, 0.14, 0.75, x, y + h + 0.32, z + 0.38, awning, { round: 0.06, rx: 0.22 });
 }
 
@@ -44,9 +44,9 @@ function window_(b, x, y, z, { w = 0.9, h = 0.95, frameCol = TRIM, shutter = nul
   b.box(w + 0.2, h + 0.2, 0.12, x, y, z + 0.02, frameCol, { round: round ? Math.min(w, h) * 0.45 : 0.06 });
   b.box(w, h, 0.1, x, y, z + 0.07, GLASS, { mat: 'windows', round: round ? Math.min(w, h) * 0.42 : 0.04, grad: 0.25 });
   if (!round) { b.box(0.06, h, 0.04, x, y, z + 0.12, frameCol); b.box(w, 0.06, 0.04, x, y, z + 0.12, frameCol); }
-  if (shutter) for (const s of [-1, 1]) b.box(w * 0.48, h + 0.12, 0.07, x + s * (w * 0.5 + 0.3), y, z + 0.05, shutter, { round: 0.04 });
+  if (shutter) for (const s of [-1, 1]) b.box(w * 0.48, h + 0.12, 0.07, x + s * (w * 0.5 + 0.3), y, z + 0.05, shutter, { round: 0.04, surf: 'wood' });
   if (box) {
-    b.box(w + 0.3, 0.24, 0.36, x, y - h / 2 - 0.2, z + 0.2, box, { round: 0.06 });
+    b.box(w + 0.3, 0.24, 0.36, x, y - h / 2 - 0.2, z + 0.2, box, { round: 0.06, surf: 'wood' });
     for (let k = 0; k < 4; k++) b.sphere(0.13, x - w / 2 + 0.05 + k * (w / 3), y - h / 2 - 0.02, z + 0.24, flowers[k % flowers.length], { grad: 0 });
     for (let k = 0; k < 3; k++) b.sphere(0.11, x - w / 2 + 0.2 + k * (w / 3), y - h / 2 - 0.07, z + 0.3, '#5cb848', { grad: 0.2 });
   }
@@ -60,17 +60,18 @@ function roof(b, kind, w, d, H, col, S, R, { snow = false } = {}) {
     const ww = w + ov * 2 + (kind === 'hip' ? -0.2 : 0);
     // gable ends (wall-coloured triangles)
     const eh = rise * (1 - (d / 2) / hd);
-    b.extrude([[-d / 2, 0], [d / 2, 0], [d / 2, eh], [0, rise], [-d / 2, eh]], w - 0.04, 0, H, 0, S.wallCol, { ry: Math.PI / 2 });
+    b.extrude([[-d / 2, 0], [d / 2, 0], [d / 2, eh], [0, rise], [-d / 2, eh]], w - 0.04, 0, H, 0, S.wallCol, { ry: Math.PI / 2, surf: S.wallSurf || 'plaster' });
+    const rs = kind === 'thatch' ? 'thatch' : 'roof';
     for (const s of [1, -1]) {
-      b.box(ww, th, len, 0, H + rise / 2 + th * 0.3, s * hd / 2, col, { rx: s * pitch, round: 0.12, grad: 0.22 });
+      b.box(ww, th, len, 0, H + rise / 2 + th * 0.3, s * hd / 2, col, { rx: s * pitch, round: 0.12, grad: 0.22, surf: rs });
       if (kind !== 'thatch') b.box(ww + 0.06, 0.1, 0.16, 0, H - 0.02 + th * 0.2, s * (hd - 0.02), TRIM, { round: 0.04 });   // eave trim
       if (snow) b.box(ww - 0.1, 0.18, len * 0.85, 0, H + rise / 2 + th * 0.62 + 0.08, s * hd / 2 * 0.92, '#f6fbff', { rx: s * pitch, round: 0.09 });
     }
-    b.cyl(0.2, 0.2, ww + 0.1, 0, H + rise + th * 0.45, 0, kind === 'thatch' ? '#8a6a3a' : shade(col, 0.82), { rz: Math.PI / 2, seg: 8 });   // ridge
+    b.cyl(0.2, 0.2, ww + 0.1, 0, H + rise + th * 0.45, 0, kind === 'thatch' ? '#8a6a3a' : shade(col, 0.82), { rz: Math.PI / 2, seg: 8, surf: rs });   // ridge
     return H + rise;
   }
   if (kind === 'flat') {
-    b.box(w + 0.5, 0.36, d + 0.5, 0, H + 0.18, 0, shade(col, 0.95), { round: 0.12 });
+    b.box(w + 0.5, 0.36, d + 0.5, 0, H + 0.18, 0, shade(col, 0.95), { round: 0.12, surf: 'plaster' });
     b.box(w + 0.3, 0.42, 0.22, 0, H + 0.5, d / 2 + 0.1, S.wallCol, { round: 0.08 });
     b.box(w + 0.3, 0.42, 0.22, 0, H + 0.5, -d / 2 - 0.1, S.wallCol, { round: 0.08 });
     b.box(0.22, 0.42, d + 0.3, w / 2 + 0.1, H + 0.5, 0, S.wallCol, { round: 0.08 });
@@ -83,15 +84,15 @@ function roof(b, kind, w, d, H, col, S, R, { snow = false } = {}) {
   }
   if (kind === 'cone') {
     const r = Math.max(w, d) / 2 + 0.7;
-    b.cone(r, 2.6, 0, H + 1.3, 0, col, { seg: 12, grad: 0.3 });
+    b.cone(r, 2.6, 0, H + 1.3, 0, col, { seg: 12, grad: 0.3, surf: 'thatch' });
     b.cone(r * 0.25, 0.8, 0, H + 2.7, 0, shade(col, 0.8), { seg: 8 });
     b.torus(r - 0.15, 0.12, 0, H + 0.12, 0, shade(col, 0.75), { rx: Math.PI / 2 });
     return H + 3;
   }
   if (kind === 'adobe') {
-    b.box(w + 0.2, 0.3, d + 0.2, 0, H + 0.15, 0, shade(S.wallCol, 0.92), { round: 0.14 });
+    b.box(w + 0.2, 0.3, d + 0.2, 0, H + 0.15, 0, shade(S.wallCol, 0.92), { round: 0.14, surf: 'plaster' });
     b.box(w + 0.2, 0.5, 0.3, 0, H + 0.4, d / 2, S.wallCol, { round: 0.14 });
-    for (let k = -2; k <= 2; k++) b.cyl(0.09, 0.09, 0.8, k * w / 5.5, H - 0.25, d / 2 + 0.15, '#8a5a36', { rx: Math.PI / 2, seg: 6 });   // vigas
+    for (let k = -2; k <= 2; k++) b.cyl(0.09, 0.09, 0.8, k * w / 5.5, H - 0.25, d / 2 + 0.15, '#8a5a36', { rx: Math.PI / 2, seg: 6, surf: 'wood' });   // vigas
     return H + 0.6;
   }
   return H;
@@ -102,13 +103,16 @@ function shade(c, k) { return '#' + new THREE.Color(c).multiplyScalar(k).getHexS
 /** Generic shell: plinth, walls (rect or round), roof, return wall height. */
 function shell(b, w, d, H, S, wallCol, roofCol, R, o = {}) {
   const lift = S.stilts || 0;
+  S.wallSurf = S.stone ? 'stone' : S.planks ? 'wood' : 'plaster';
+  b.surf = 'wood';
   if (lift) {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.cyl(0.14, 0.17, lift + 0.6, sx * (w / 2 - 0.3), lift / 2 - 0.3, sz * (d / 2 - 0.3), '#8a5a36', { seg: 6 });
     b.box(w + 0.7, 0.2, d + 0.9, 0, lift, 0.25, '#c08c58', { round: 0.05 });         // deck
     b.box(1.3, lift, 0.9, 0, lift / 2, d / 2 + 1.0, '#b07c4a', { round: 0.05, rx: -0.5 });   // ramp
   } else {
-    b.box(w + 0.3, 0.75, d + 0.3, 0, -0.18, 0, S.plinth, { round: 0.12 });
+    b.box(w + 0.3, 0.75, d + 0.3, 0, -0.18, 0, S.plinth, { round: 0.12, surf: 'stone' });
   }
+  b.surf = S.wallSurf;
   const y0 = lift ? lift + 0.1 : 0.15;
   b.push(0, y0, 0);
   if (S.round) {
@@ -117,12 +121,16 @@ function shell(b, w, d, H, S, wallCol, roofCol, R, o = {}) {
     b.box(w, H, d, 0, H / 2, 0, wallCol, { round: 0.22, grad: 0.1 });
     if (S.stone) for (let k = 0; k < 14; k++) b.box(0.5 + R() * 0.4, 0.28, 0.06, (R() - 0.5) * (w - 1), 0.3 + R() * (H - 0.6), d / 2 + 0.01, shade(wallCol, 0.86), { round: 0.08 });
     if (S.planks) for (let k = 1; k < Math.floor(H / 0.45); k++) { b.box(w + 0.02, 0.05, 0.03, 0, k * 0.45, d / 2 + 0.005, shade(wallCol, 0.84)); b.box(0.03, 0.05, d + 0.02, w / 2 + 0.005, k * 0.45, 0, shade(wallCol, 0.84)); b.box(0.03, 0.05, d + 0.02, -w / 2 - 0.005, k * 0.45, 0, shade(wallCol, 0.84)); }
+    b.surf = 'wood';
     if (S.timber) { for (const sx of [-1, 1]) b.box(0.16, H, 0.08, sx * (w / 2 - 0.1), H / 2, d / 2 + 0.02, '#6a4a3a'); b.box(w, 0.16, 0.08, 0, H - 0.1, d / 2 + 0.02, '#6a4a3a'); }
     // corner pillars (soft, darker) give the chunky toy look
+    b.surf = S.wallSurf;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) b.box(0.26, H, 0.26, sx * (w / 2 - 0.04), H / 2, sz * (d / 2 - 0.04), shade(wallCol, 0.93), { round: 0.1 });
   }
   S.wallCol = wallCol;
+  b.surf = null;
   const top = roof(b, o.roof || S.roof, w, d, H, roofCol, S, R, { snow: S.snow });
+  b.surf = null;
   b.pop();
   return { y0, top: top + y0 };
 }
@@ -162,7 +170,7 @@ export function buildHouse(ctx, def) {
       if (S.balcony) { b.box(w * 0.55, 0.14, 0.9, 0, y0 + 3.0, d / 2 + 0.45, '#e6dccb', { round: 0.05 }); for (let k = 0; k < 7; k++) b.box(0.06, 0.6, 0.06, -w * 0.26 + k * w * 0.087, y0 + 3.35, d / 2 + 0.85, WHITE); b.box(w * 0.55, 0.08, 0.08, 0, y0 + 3.66, d / 2 + 0.85, WHITE); }
     }
   }
-  if (S.chimney) { b.box(0.6, 1.6, 0.6, w * 0.28, y0 + H + 1.0, -d * 0.18, S.stone ? '#a8a2b4' : '#d98a6a', { round: 0.08 }); b.box(0.72, 0.18, 0.72, w * 0.28, y0 + H + 1.85, -d * 0.18, '#8a7a7a', { round: 0.05 }); }
+  if (S.chimney) { b.box(0.6, 1.6, 0.6, w * 0.28, y0 + H + 1.0, -d * 0.18, S.stone ? '#a8a2b4' : '#d98a6a', { round: 0.08, surf: 'stone' }); b.box(0.72, 0.18, 0.72, w * 0.28, y0 + H + 1.85, -d * 0.18, '#8a7a7a', { round: 0.05 }); }
   if (S.vigas) b.box(1.6, 0.12, 0.8, 0, y0 + 2.3, d / 2 + 0.4, '#8a5a36', { round: 0.04 });
   // wall lamp by the door (glows at night)
   b.box(0.12, 0.3, 0.12, 0.95, y0 + 2.2, fz + 0.1, '#5a4a4a', { round: 0.03 });
@@ -180,9 +188,9 @@ export function buildCenter(ctx, def) {
   const b = def.builder || new Builder({ seed: 'center', groundAt: def.heightAt });
   const w = def.w, d = def.d, H = 3.6;
   frame(b, def, def.heightAt);
-  b.box(w + 0.4, 0.75, d + 0.4, 0, -0.18, 0, '#e6dccb', { round: 0.12 });
+  b.box(w + 0.4, 0.75, d + 0.4, 0, -0.18, 0, '#e6dccb', { round: 0.12, surf: 'stone' });
   b.push(0, 0.15, 0);
-  b.box(w, H, d, 0, H / 2, 0, '#fffaf2', { round: 0.3, grad: 0.08 });
+  b.box(w, H, d, 0, H / 2, 0, '#fffaf2', { round: 0.3, grad: 0.08, surf: 'plaster' });
   b.box(w + 0.04, 0.7, d + 0.04, 0, 0.35, 0, '#e8474a', { round: 0.2 });                     // red skirt band
   // roof: thick rounded red slab with a soft dome on top
   b.box(w + 1.0, 0.55, d + 1.0, 0, H + 0.25, 0, '#e8474a', { round: 0.26, grad: 0.15 });
@@ -215,9 +223,9 @@ export function buildShop(ctx, def) {
   const w = def.w, d = def.d, H = 3.2;
   const S = { ...STYLE[def.style] || STYLE.village };
   frame(b, def, def.heightAt);
-  b.box(w + 0.3, 0.75, d + 0.3, 0, -0.18, 0, S.plinth || '#d8c6a4', { round: 0.12 });
+  b.box(w + 0.3, 0.75, d + 0.3, 0, -0.18, 0, S.plinth || '#d8c6a4', { round: 0.12, surf: 'stone' });
   b.push(0, 0.15, 0);
-  b.box(w, H, d, 0, H / 2, 0, '#f2fbff', { round: 0.26, grad: 0.08 });
+  b.box(w, H, d, 0, H / 2, 0, '#f2fbff', { round: 0.26, grad: 0.08, surf: 'plaster' });
   b.box(w + 0.04, 0.6, d + 0.04, 0, 0.3, 0, '#3fa6d9', { round: 0.18 });
   S.wallCol = '#f2fbff';
   roof(b, def.style === 'city' || def.style === 'adobe' ? 'flat' : 'gable', w, d, H, '#2f86c9', { ...S, pitch: 0.45 }, rng(7));
@@ -243,9 +251,9 @@ export function buildLab(ctx, def) {
   const b = def.builder;
   const w = def.w, d = def.d, H = 3.6;
   frame(b, def, def.heightAt);
-  b.box(w + 0.4, 0.75, d + 0.4, 0, -0.18, 0, '#d8d4cc', { round: 0.12 });
+  b.box(w + 0.4, 0.75, d + 0.4, 0, -0.18, 0, '#d8d4cc', { round: 0.12, surf: 'stone' });
   b.push(0, 0.15, 0);
-  b.box(w, H, d, 0, H / 2, 0, '#fbfdff', { round: 0.3, grad: 0.08 });
+  b.box(w, H, d, 0, H / 2, 0, '#fbfdff', { round: 0.3, grad: 0.08, surf: 'plaster' });
   b.box(w + 0.04, 0.5, d + 0.04, 0, 0.25, 0, '#2fa8a0', { round: 0.15 });
   b.box(w + 0.8, 0.45, d + 0.8, 0, H + 0.2, 0, '#2fa8a0', { round: 0.22, grad: 0.15 });
   b.cyl(1.8, 1.9, 1.1, w * 0.25, H + 0.95, -d * 0.1, '#e8eef4', { seg: 18 });
@@ -279,10 +287,12 @@ export function buildOsteria(ctx, def) {
   b.cone(0.18, 0.25, -w / 2 + 0.3, y0 + 2.25, d / 2 + 0.95, '#a8203a', { rx: Math.PI });
   // pergola
   const pz = d / 2 + 2.1;
+  b.surf = 'wood';
   for (const sx of [-1, 1]) for (const sz of [0, 1]) b.cyl(0.08, 0.08, 2.5, sx * (w / 2 - 0.3), 1.25, pz - 1.6 + sz * 2.4, '#8a5a36', { seg: 6 });
   for (let k = 0; k < 5; k++) b.box(0.1, 0.1, 2.8, -w / 2 + 0.3 + k * (w - 0.6) / 4, 2.5, pz - 0.4, '#9a6a43');
   for (let k = 0; k < 9; k++) { const x = -w / 2 + 0.4 + k * (w - 0.8) / 8; b.sphere(0.07, x, 2.32 - Math.sin(k / 8 * Math.PI) * 0.2, pz + 0.75, ['#ffd98a', '#ffb0c8', '#bfe6ff'][k % 3], { mat: 'glow' }); }
   b.glow(0, 2.2, pz, '#ffc070', 1.6, 'pergola');
+  b.surf = null;
   for (const sx of [-1, 1]) {
     b.cyl(0.55, 0.55, 0.07, sx * 1.6, 0.76, pz, '#ffffff', { seg: 12 }); b.cyl(0.06, 0.06, 0.75, sx * 1.6, 0.38, pz, '#5a4a3a', { seg: 6 });
     for (const s2 of [-1, 1]) b.box(0.4, 0.45, 0.4, sx * 1.6 + s2 * 0.75, 0.23, pz, '#b97b47', { round: 0.06 });

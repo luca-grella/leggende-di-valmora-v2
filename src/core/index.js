@@ -10,6 +10,8 @@ import { createTime, lightingAt, phaseOf } from './time.js';
 import { createInput } from './input.js';
 import { createCameraRig } from './camera.js';
 import { createToon } from './toon.js';
+import { createSurfaces } from './surfaces.js';
+import { installCharacterLook } from './charlook.js';
 import { kit } from './meshkit.js';
 import { createQuality } from './quality.js';
 import { createPost } from './post.js';
@@ -74,6 +76,11 @@ export async function createCore(opts = {}) {
     onFrame: real => ctx.quality.sample(real),
   });
   ctx.toon = createToon({ renderer, quality: ctx.quality });
+  // environment surface detail: CC0 photo textures (default) or all-procedural (?grafica=codice)
+  ctx.surfaces = createSurfaces({ renderer, quality: ctx.quality, params });
+  ctx.grafica = ctx.surfaces.mode;
+  ctx.toon.useSurfaces(ctx.surfaces);
+  installCharacterLook(ctx);   // skin / fabric / hair shading on the actors' material (after game:ready)
   ctx.cameraRig = createCameraRig({ camera, ctx });
   ctx.input = createInput({ bus: ctx.bus, getYaw: () => ctx.cameraRig.effectiveYaw, save: ctx.save });
   ctx.time = createTime({ bus: ctx.bus, save: ctx.save });
@@ -101,7 +108,7 @@ export async function createCore(opts = {}) {
   ctx.post.setSize(ctx.viewport.width, ctx.viewport.height, ctx.viewport.pixelRatio);
   const applyQuality = () => {
     renderer.shadowMap.enabled = ctx.quality.shadows;
-    ctx.toon.applyQuality(); ctx.post.applyQuality(); resize();
+    ctx.toon.applyQuality(); ctx.post.applyQuality(); ctx.surfaces.applyQuality(); resize();
     // materials compiled with/without shadows must recompile
     scene.traverse(o => { const m = o.material; if (!m) return; (Array.isArray(m) ? m : [m]).forEach(x => { x.needsUpdate = true; }); });
   };

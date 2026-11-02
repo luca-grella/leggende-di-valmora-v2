@@ -6,6 +6,7 @@
 // Light units: three r160 physical units (no legacy ×π). ctx.time.lighting() already returns
 // intensities in these units, so World can assign them directly (sun.intensity = L.sunIntensity).
 import * as THREE from 'three';
+import { SURF_GLSL, SURF } from './surfaces.js';
 
 /** Named colours from docs/GDD.md "Look". */
 export const PALETTE = {
@@ -80,6 +81,9 @@ uniform mat4 uCamWorld;
 uniform sampler2D uNoiseTex;
 uniform vec4 uCloud;      // offset.xy, strength, cover
 uniform float uSheen;
+#ifndef SURF_ON
+float gSurfGloss = 0.0;
+#endif
 float toonRamp( float dotNL ) {
   vec2 coord = vec2( dotNL * 0.5 + 0.5, 0.5 );
   #ifdef USE_GRADIENTMAP
@@ -114,8 +118,8 @@ void RE_Direct_Toon( const in IncidentLight directLight, const in vec3 geometryP
   reflectedLight.directDiffuse += g * tint * col * BRDF_Lambert( material.diffuseColor );
   // soft sheen: broad, faint highlight only where the sun really hits
   vec3 hv = normalize( directLight.direction + geometryViewDir );
-  float sp = pow( max( dot( geometryNormal, hv ), 0.0 ), 28.0 ) * smoothstep( 0.0, 0.25, ndl ) * lit;
-  reflectedLight.directDiffuse += col * sp * uSheen * 0.05;   // (toon output ignores directSpecular)
+  float sp = pow( max( dot( geometryNormal, hv ), 0.0 ), 28.0 + 60.0 * gSurfGloss ) * smoothstep( 0.0, 0.25, ndl ) * lit;
+  reflectedLight.directDiffuse += col * sp * ( uSheen * 0.05 + gSurfGloss * 0.5 );   // (toon output ignores directSpecular)
 }
 void RE_IndirectDiffuse_Toon( const in vec3 irradiance, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in ToonMaterial material, inout ReflectedLight reflectedLight ) {
   reflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
@@ -150,6 +154,54 @@ const OUTLINE_VERT = /* glsl */`
 }
 `;
 
+// Surface detail (src/core/surfaces.js) for environment materials: triplanar colour detail, normal and
+// cavity from the shared texture arrays. Layer from the vertex attribute aSurf (layer + 1, 0 = none) on
+// merged scenery, or a constant layer per material. A tiny gloss term feeds the sun sheen.
+const SURF_VERT_PARS = /* glsl */`
+#ifdef SURF_ATTR
+attribute float aSurf;
+#endif
+varying float vSurf; varying vec3 vSurfW; varying vec3 vSurfN;
+`;
+const SURF_VERT = /* glsl */`
+#include <worldpos_vertex>
+{
+  #ifdef SURF_ATTR
+    vSurf = aSurf - 1.0;
+  #else
+    vSurf = SURF_CONST;
+  #endif
+  vec4 sp = vec4(transformed, 1.0);
+  vec3 sn = objectNormal;
+  #ifdef USE_INSTANCING
+    sp = instanceMatrix * sp; sn = mat3(instanceMatrix) * sn;
+  #endif
+  vSurfW = (modelMatrix * sp).xyz;
+  vSurfN = normalize(mat3(modelMatrix) * sn);
+}`;
+const SURF_FRAG_PARS = /* glsl */`
+varying float vSurf; varying vec3 vSurfW; varying vec3 vSurfN;
+float gSurfGloss = 0.0;
+` + SURF_GLSL;
+const SURF_COLOR = /* glsl */`
+#include <color_fragment>
+vec3 surfNW = vec3(0.0); bool surfHas = false;
+if (vSurf > -0.5 && uSurfOn.x > 0.5) {
+  vec3 sc; float sao, sg;
+  surfTri(vSurfW, normalize(vSurfN), int(vSurf + 0.5), sc, surfNW, sao, sg);
+  // distance fade: far surfaces keep the plain painted colour (no shimmer)
+  float sd = 1.0 - smoothstep(45.0, 110.0, length(vViewPosition));
+  diffuseColor.rgb *= mix(vec3(1.0), sc, uSurfOn.y * sd);
+  diffuseColor.rgb *= mix(1.0, clamp(sao * 1.55, 0.35, 1.25), 0.75 * uSurfOn.w * sd);
+  gSurfGloss = sg * sd;
+  surfHas = sd > 0.01;
+}`;
+const SURF_NORMAL = /* glsl */`
+#include <normal_fragment_maps>
+if (surfHas) normal = normalize(mix(normal, normalize(mat3(viewMatrix) * surfNW) * (gl_FrontFacing ? 1.0 : 1.0), 0.85));
+`;
+let SURF_U = null;
+
 /**
  * @param {{renderer:THREE.WebGLRenderer, quality:any}} opts
  */
@@ -170,23 +222,39 @@ export function createToon({ renderer, quality }) {
   let sun = null, lastL = null, cloudsOn = true, cloudDay = 1;
 
   /** Patch a MeshToonMaterial with the Valmora lighting model. */
-  function patch(m, { rim = 0, shadeTint = null, sheen = 1 } = {}) {
+  function patch(m, { rim = 0, shadeTint = null, sheen = 1, surf = null } = {}) {
     m.userData.rim = rim;
     m.userData.uRim = { value: rim };
     m.userData.uSheen = m.userData.uSheen || { value: sheen };
     const shade = shadeTint ? { value: new THREE.Color(shadeTint) } : shared.uShadeTint;
     m.userData.uShadeTint = shade;
+    // surf: 'attr' (vertex attribute aSurf = layer + 1) or a layer name (constant); needs toon.useSurfaces()
+    const surfOn = !!surf && !!SURF_U && (surf === 'attr' || surf in SURF);
+    m.userData.surf = surfOn ? surf : null;
+    // meshes without an aSurf buffer must read 0 (plain), not a stale generic attribute value
+    if (surfOn && surf === 'attr') m.defaultAttributeValues = { ...(m.defaultAttributeValues || {}), aSurf: [0] };
     m.onBeforeCompile = sh => {
       sh.uniforms.uShadeTint = shade;
       sh.uniforms.uRimColor = shared.uRimColor;
       sh.uniforms.uRim = m.userData.uRim;
       sh.uniforms.uCamWorld = shared.uCamWorld; sh.uniforms.uNoiseTex = shared.uNoiseTex; sh.uniforms.uCloud = shared.uCloud;
       sh.uniforms.uSheen = m.userData.uSheen;
+      if (surfOn) {
+        Object.assign(sh.uniforms, SURF_U);
+        const def = '#define SURF_ON\n' + (surf === 'attr' ? '#define SURF_ATTR\n' : `#define SURF_CONST ${SURF[surf].toFixed(1)}\n`);
+        sh.vertexShader = def + sh.vertexShader
+          .replace('#include <common>', '#include <common>\n' + SURF_VERT_PARS)
+          .replace('#include <worldpos_vertex>', SURF_VERT);
+        sh.fragmentShader = def + sh.fragmentShader
+          .replace('#include <common>', '#include <common>\n' + SURF_FRAG_PARS)
+          .replace('#include <color_fragment>', SURF_COLOR)
+          .replace('#include <normal_fragment_maps>', SURF_NORMAL);
+      }
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <lights_toon_pars_fragment>', TOON_LIGHTS + (rim > 0 ? '#define TOON_RIM\nuniform vec3 uRimColor;\nuniform float uRim;\n' : ''))
         .replace('#include <lights_fragment_end>', TOON_RIM);
     };
-    m.customProgramCacheKey = () => 'valmora-toon' + (rim > 0 ? '-rim' : '');
+    m.customProgramCacheKey = () => 'valmora-toon' + (rim > 0 ? '-rim' : '') + (surfOn ? '-surf-' + surf : '');
     return m;
   }
 
@@ -194,6 +262,9 @@ export function createToon({ renderer, quality }) {
 
   const toon = {
     ramp, palette: PALETTE, uniforms: shared, SHADE,
+    /** Plug the surface-detail textures in (core, before any world material is created). */
+    useSurfaces(s) { SURF_U = s?.uniforms || null; toon.surfaces = s || null; },
+    surfaces: null,
 
     /**
      * Cached toon material. opts: {emissive, emissiveIntensity, transparent, opacity, side, vertexColors,
@@ -211,7 +282,7 @@ export function createToon({ renderer, quality }) {
       });
       if (o.flatShading) m.flatShading = true;
       if (o.depthWrite === false) m.depthWrite = false;
-      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint, sheen: o.sheen ?? 1 });
+      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint, sheen: o.sheen ?? 1, surf: o.surf });
       m.name = 'toon ' + k;
       cache.set(k, m);
       return m;
@@ -220,7 +291,7 @@ export function createToon({ renderer, quality }) {
     matUnique(color = '#ffffff', o = {}) {
       const m = toon.mat(color, o).clone();
       m.userData = { ...m.userData, uSheen: { value: o.sheen ?? 1 } };
-      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint, sheen: o.sheen ?? 1 });
+      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint, sheen: o.sheen ?? 1, surf: o.surf });
       return m;
     },
     /** Shared vertex-colour toon material for merged scenery (white base × vertex colours). */

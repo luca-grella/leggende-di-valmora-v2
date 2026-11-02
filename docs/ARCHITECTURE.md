@@ -16,8 +16,10 @@ CHANGES.md.
   `shaders/{CopyShader,LuminosityHighPassShader,OutputShader}`, `utils/{BufferGeometryUtils,SkeletonUtils}`.
   Need another r160 addon? Copy it from `https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/...` into
   `vendor/addons/` (engine area; ask in CHANGES.md).
-- **No external runtime requests**: no CDN, no web fonts, no models, no textures, no audio files.
-  Everything procedural. Works offline once cached by the service worker.
+- **No external runtime requests**: no CDN, no web fonts, no models, no audio files. Everything
+  procedural, with ONE exception: the CC0 environment textures in `assets/textures/` used by the default
+  graphics mode (see "Graphics modes" below; same origin, cached by the service worker on first fetch,
+  never precached). Works offline once cached.
 - World generation uses the seeded RNG `ctx.math.rng(seed)` (identical world on every load).
   Gameplay randomness may use `Math.random()`.
 - **All player-visible text in Italian.** Code, comments, docs in English.
@@ -28,7 +30,26 @@ CHANGES.md.
 - Every module exports `init(ctx)` (sync or async) returning its API object.
 - One coherent look: **only use `ctx.toon` materials** (plus your own ShaderMaterial when
   needed, e.g. water, sky, grass, built on the same ramp/palette). No `MeshStandardMaterial`
-  with photo-real settings, no textures from files.
+  with photo-real settings. Surface detail only through `ctx.surfaces` (below), never a texture
+  loaded by an area.
+
+## Graphics modes (`?grafica=`) — QA must test BOTH
+Read once at startup by `src/core/surfaces.js` (`ctx.surfaces.mode`, also `ctx.grafica`):
+- **default → `immagini`**: CC0 photo textures (Poly Haven, `assets/textures/<layer>_col.jpg` + `_nh.jpg`,
+  512 px, credits in `assets/textures/CREDITS.txt`) for ENVIRONMENT surfaces only: grass, dirt, sand,
+  rock, cobble, plaster, roof, wood, bark, stone, thatch. Characters, Velmon, sky, water stay in code.
+- **`?grafica=codice`**: everything in code. `src/core/surfgen.js` generates the same layers from tileable
+  noise/Voronoi in a module Worker (main-thread fallback); the files in `assets/` are never requested.
+- Both fill the SAME texture arrays (`uSurfCol`: RGB colour *detail* around 1.0 + height; `uSurfNor`: normal,
+  cavity, gloss), so every shader is shared. Detail multiplies the palette / vertex colour: photos never bring
+  their own colours, which keeps environment and characters one coherent painted look. The `leaf` layer
+  (tree canopies) is procedural in both modes.
+- Using it: `ctx.toon.mat(color, {surf: 'wood'})` (constant layer, triplanar in world space) or
+  `{surf: 'attr'}` + a float vertex attribute `aSurf` = layer index + 1 (0 = plain). World `Builder` parts take
+  `{surf: 'roof'}` (or `b.surf = 'stone'` for following parts); `b.rock()` defaults to `rock`. The terrain
+  (`src/world/terrain.js`) blends sand → grass → dirt → cobbles → rock by texture HEIGHT.
+- `ctx.surfaces.ready` resolves when all layers are in (neutral flat detail until then). Headless scenarios
+  should `await L.ctx.surfaces.ready` before the first capture.
 
 ## Directory ownership (edit only your area; read anything)
 | Area | Owns |

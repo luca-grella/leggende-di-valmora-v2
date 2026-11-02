@@ -7,6 +7,7 @@ import { clamp, smoothstep, lerp } from '../core/math.js';
 import { polyQuery, N } from './shape.js';
 import { GRID } from './heightfield.js';
 import { segDist } from './layout.js';
+import { SURF, SURF_GLSL } from '../core/surfaces.js';
 
 const CHUNK = 32;
 export const GLSL_NOISE = /* glsl */`
@@ -15,10 +16,17 @@ float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f * f * (3. - 2.
   return mix(mix(vhash(i), vhash(i + vec2(1., 0.)), u.x), mix(vhash(i + vec2(0., 1.)), vhash(i + 1.), u.x), u.y); }
 `;
 
-/** Terrain toon material for an island (own MeshToonMaterial on the shared ramp). */
+/**
+ * Terrain toon material for an island (own MeshToonMaterial on the shared ramp). Layers (sand → grass →
+ * dirt → cobbles → rock) come from the shared surface textures (src/core/surfaces.js: CC0 photos or
+ * procedural, same arrays) and are blended by HEIGHT, not by a hard mask: grass grows between the
+ * cobbles, pebbles poke out of the path edges, sand settles in the rock cracks. The island palette stays
+ * the base colour; textures add detail, normals and cavity.
+ */
 export function terrainMaterial(ctx, colors) {
   const C = c => new THREE.Color(c);
   const mat = ctx.toon.matUnique('#ffffff', { vertexColors: true });
+  const SU = ctx.toon.surfaces?.uniforms || ctx.surfaces?.uniforms;
   const U = {
     uGrassA: { value: C(colors.grass) }, uGrassB: { value: C(colors.grass2) }, uGrassC: { value: C(colors.meadow) }, uGrassD: { value: C(colors.grassDark) },
     uPath: { value: C(colors.path) }, uPath2: { value: C(colors.path2) }, uPlaza: { value: C(colors.plaza) }, uPlaza2: { value: C(colors.plaza2) },
@@ -27,75 +35,91 @@ export function terrainMaterial(ctx, colors) {
   mat.userData.U = U;
   const baseCompile = mat.onBeforeCompile;
   const baseKey = mat.customProgramCacheKey?.() || '';
+  const L = SURF;
   mat.onBeforeCompile = (sh, r) => {
     baseCompile?.call(mat, sh, r);
     Object.assign(sh.uniforms, U);
+    if (SU) Object.assign(sh.uniforms, SU);
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float aGrass;\nattribute vec4 aMask;\nvarying float vGrass;\nvarying vec4 vMask;\nvarying vec3 vWPos;\nvarying float vNy;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGrass = aGrass; vMask = aMask; vWPos = (modelMatrix * vec4(position, 1.0)).xyz; vNy = normal.y;');
-    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nattribute float aGrass;\nattribute vec4 aMask;\nvarying float vGrass;\nvarying vec4 vMask;\nvarying vec3 vWPos;\nvarying vec3 vTN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvGrass = aGrass; vMask = aMask; vWPos = (modelMatrix * vec4(position, 1.0)).xyz; vTN = normalize(mat3(modelMatrix) * normal);');
+    sh.fragmentShader = '#define SURF_ON\n' + sh.fragmentShader
       .replace('#include <common>', `#include <common>
-varying float vGrass; varying vec4 vMask; varying vec3 vWPos; varying float vNy;
+varying float vGrass; varying vec4 vMask; varying vec3 vWPos; varying vec3 vTN;
 uniform vec3 uGrassA, uGrassB, uGrassC, uGrassD, uPath, uPath2, uPlaza, uPlaza2, uRock, uRockDark, uCliff; uniform float uSnow;
+float gSurfGloss = 0.0;
+${SURF_GLSL}
 ${GLSL_NOISE}`)
       .replace('#include <color_fragment>', `
   vec2 wp = vWPos.xz;
   float n1 = vnoise(wp * 0.45), n2 = vnoise(wp * 0.07 + 7.1), n3 = vnoise(wp * 1.7 + 3.3), n4 = vnoise(wp * 0.021 + 1.9);
-  vec3 col = vColor;
-  // grass: two big tone patches + lighter meadows, tiny darker tufts
-  vec3 g = mix(uGrassA, uGrassB, smoothstep(0.42, 0.58, n2));
-  g = mix(g, uGrassC, smoothstep(0.62, 0.7, n4) * 0.65);
-  g = mix(g, uGrassD, smoothstep(0.8, 0.84, n3) * 0.18);
-  float gv = vGrass + (n1 - 0.5) * 0.32;
-  float gm = step(0.5, gv);
-  col = mix(col, g, gm);
-  col *= 1.0 - 0.13 * gm * (1.0 - smoothstep(0.5, 0.56, gv));              // dark rim at the grass edge
-  col *= 1.0 - 0.22 * vMask.w * gm;                                         // shade under tall grass / woods
-  // dirt paths with a soft darker rim
-  float pv = vMask.x + (n1 - 0.5) * 0.26 + (n3 - 0.5) * 0.08;
-  float pm = step(0.5, pv);
-  vec3 pc = mix(uPath, uPath2, smoothstep(0.3, 0.7, n3) * 0.6);
-  pc *= 1.0 - 0.12 * (1.0 - smoothstep(0.5, 0.58, pv));
-  col = mix(col, pc, pm);
-  // cobbled plazas
-  float zv = vMask.y + (n1 - 0.5) * 0.12;
-  if (zv > 0.5) {
-    vec2 q = wp * vec2(1.05, 1.4); q.x += floor(q.y) * 0.5;
-    vec2 cell = floor(q), f = fract(q);
-    float grout = smoothstep(0.0, 0.07, min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) * 1.4);
-    vec3 tile = mix(uPlaza, uPlaza2, step(0.6, vhash(cell)));
-    tile = mix(tile * 0.84, tile, grout);
-    col = tile * (1.0 - 0.1 * (1.0 - smoothstep(0.5, 0.56, zv)));
+  float sd = (1.0 - smoothstep(70.0, 150.0, length(vViewPosition))) * uSurfOn.y * uSurfOn.x;
+  vec3 TN = normalize(vTN);
+  // base: sea bed / wet sand / dry sand (vertex colour) × sand detail
+  Surf sS = surfPlanar(wp, ${L.sand});
+  vec3 col = vColor * mix(vec3(1.0), sS.col, sd);
+  vec2 tn = sS.n; float tao = sS.ao, th = sS.h, tg = sS.gloss;
+  float wet = (1.0 - smoothstep(0.12, 0.6, vWPos.y)) * smoothstep(-0.6, -0.1, vWPos.y);
+  col *= 1.0 - 0.2 * wet; tg = mix(tg, 0.75, wet * 0.8);
+  float gm = 0.0, pm = 0.0, zm = 0.0, rm = 0.0;
+  // grass: palette patches × blade detail, height-blended edge with a darker rim
+  if (vGrass > 0.18) {
+    Surf g = surfPlanar(wp, ${L.grass});
+    vec3 gc = mix(uGrassA, uGrassB, smoothstep(0.42, 0.58, n2));
+    gc = mix(gc, uGrassC, smoothstep(0.62, 0.7, n4) * 0.65);
+    gc = mix(gc, uGrassD, smoothstep(0.78, 0.86, n3) * 0.22);
+    float gv = vGrass + (n1 - 0.5) * 0.3 + (g.h - th) * 0.4;
+    gm = smoothstep(0.46, 0.54, gv);
+    gc *= mix(vec3(1.0), g.col, sd * 1.3);
+    // clumps at 0.3–1.5 m (what reads from the 3/4 camera): darker dense tufts, sunlit lighter yellowish tips
+    float clump = vnoise(wp * 1.25 + 4.3) * 0.55 + vnoise(wp * 3.6 + 1.1) * 0.3 + vnoise(wp * 9.0) * 0.15;
+    gc *= 0.8 + 0.38 * clump;
+    gc = mix(gc, gc * vec3(1.08, 1.04, 0.82), smoothstep(0.62, 0.85, clump) * 0.6);
+    gc *= 1.0 - 0.14 * (1.0 - smoothstep(0.5, 0.62, gv));
+    col = mix(col, gc, gm); tn = mix(tn, g.n, gm); tao = mix(tao, g.ao, gm); th = mix(th, g.h, gm); tg = mix(tg, g.gloss, gm);
   }
-  // rock / cliffs with horizontal strata
-  float rv = vMask.z + (n1 - 0.5) * 0.25;
-  if (rv > 0.5) {
-    float band = step(0.5, fract(vWPos.y * 0.55 + n2 * 0.6));
+  // packed dirt (building skirts, worn ground)
+  if (vMask.x > 0.18) {
+    Surf d = surfPlanar(wp, ${L.dirt});
+    float pv = vMask.x + (n1 - 0.5) * 0.24 + (d.h - th) * 0.45;
+    pm = smoothstep(0.46, 0.54, pv);
+    vec3 pc = mix(uPath, uPath2, smoothstep(0.3, 0.7, n3) * 0.6) * mix(vec3(1.0), d.col, sd);
+    pc *= 1.0 - 0.12 * (1.0 - smoothstep(0.5, 0.6, pv));
+    col = mix(col, pc, pm); tn = mix(tn, d.n, pm); tao = mix(tao, d.ao, pm); th = mix(th, d.h, pm); tg = mix(tg, d.gloss, pm);
+  }
+  // plaza cobbles: grass and sand settle in the grout near the edge
+  if (vMask.y > 0.18) {
+    Surf c = surfPlanar(wp, ${L.cobble});
+    float zv = vMask.y + (n1 - 0.5) * 0.12 + (c.h - th) * 0.5;
+    zm = smoothstep(0.45, 0.55, zv);
+    vec3 zc = mix(uPlaza, uPlaza2, smoothstep(0.35, 0.65, n2)) * mix(vec3(1.0), c.col, sd);
+    col = mix(col, zc, zm); tn = mix(tn, c.n, zm); tao = mix(tao, c.ao, zm); th = mix(th, c.h, zm); tg = mix(tg, c.gloss, zm);
+  }
+  vec3 nW = normalize(TN + vec3(tn.x, 0.0, tn.y) * uSurfOn.z * sd * 1.2);
+  // rock and cliffs: triplanar (vertical faces), banded palette strata, snow on top
+  if (vMask.z > 0.18) {
+    vec3 rcD, rN; float rao, rgl;
+    surfTri(vWPos, TN, ${L.rock}, rcD, rN, rao, rgl);
+    float rv = vMask.z + (n1 - 0.5) * 0.25;
+    rm = smoothstep(0.44, 0.56, rv + (rcD.r * 0.5 - 0.5) * 0.3);
+    float band = smoothstep(0.35, 0.65, fract(vWPos.y * 0.45 + n2 * 0.6));
     vec3 rc = mix(uCliff, uRock, band * 0.7);
-    rc = mix(rc, uRockDark, step(0.82, n3) * 0.5);
-    rc = mix(rc, vec3(0.95, 0.97, 1.0), uSnow * smoothstep(0.6, 0.9, vNy));
-    col = rc;
+    rc = mix(rc, uRockDark, smoothstep(0.7, 0.9, n3) * 0.5);
+    rc *= mix(vec3(1.0), rcD, sd);
+    rc = mix(rc, vec3(0.95, 0.97, 1.0), uSnow * smoothstep(0.6, 0.9, TN.y));
+    col = mix(col, rc, rm); nW = normalize(mix(nW, rN, rm * sd)); tao = mix(tao, rao, rm); tg = mix(tg, rgl, rm);
   }
-  // fine mottling (grain of the soil, grass clumps, worn stones): breaks the flat colour fields
-  float fd = vnoise(wp * 5.3 + 2.7) * 0.55 + vnoise(wp * 14.0) * 0.45;
-  col *= 0.9 + 0.2 * fd + 0.06 * gm * (vnoise(wp * vec2(26.0, 9.0)) - 0.5);
+  col *= 1.0 - 0.22 * vMask.w;                                    // shade under tall grass / woods / contact
+  col *= 1.0 - 0.18 * gm * vMask.w;
+  col *= mix(1.0, clamp(tao * 1.55, 0.4, 1.2), 0.7 * uSurfOn.w * sd);   // cavity
+  col *= 0.94 + 0.12 * n4;                                         // big soft value patches (breaks repetition)
+  gSurfGloss = tg * sd;
   diffuseColor.rgb *= col;
 `)
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
-  {
-    // micro relief (bump from world-space noise): grass clumps, path ruts, sand ripples, cobble bevels
-    float zm = step(0.5, zv), rm = step(0.5, rv), sm = (1.0 - gm) * (1.0 - pm) * (1.0 - zm) * (1.0 - rm);
-    float e = 0.07;
-    vec2 q0 = wp;
-    #define VH(P) (vnoise((P) * 2.6) * 0.5 + vnoise((P) * 7.5 + 3.1) * 0.5 + sm * 0.35 * sin((P).x * 2.4 + (P).y * 0.9 + vnoise((P) * 0.6) * 4.0))
-    float h0 = VH(q0), hx = VH(q0 + vec2(e, 0.0)), hz = VH(q0 + vec2(0.0, e));
-    #undef VH
-    float k = 0.05 * (gm * 1.0 + pm * 0.8 + sm * 0.9 + zm * 0.35) * (1.0 - rm);
-    vec3 dw = vec3((hx - h0) / e, 0.0, (hz - h0) / e) * k;
-    normal = normalize(normal - mat3(viewMatrix) * dw * 3.0);
-  }`);
+  normal = normalize(mat3(viewMatrix) * nW);`);
   };
-  mat.customProgramCacheKey = () => baseKey + '|valmora-terrain';
+  mat.customProgramCacheKey = () => baseKey + '|valmora-terrain-surf';
   return mat;
 }
 
@@ -153,6 +177,8 @@ export function* buildTerrainGen(ctx, island) {
         const dx2 = x - b.x, dz2 = z - b.z; if (dx2 * dx2 + dz2 * dz2 > (b.w + b.d) ** 2) continue;
         const c = Math.cos(b.facing), s = Math.sin(b.facing), lx = dx2 * c - dz2 * s, lz = dx2 * s + dz2 * c;
         if (Math.abs(lx) < b.w / 2 + 0.6 && Math.abs(lz) < b.d / 2 + 0.6) path = Math.max(path, 0.8);
+        const od = Math.hypot(Math.max(0, Math.abs(lx) - b.w / 2), Math.max(0, Math.abs(lz) - b.d / 2));
+        shade = Math.max(shade, 0.5 * (1 - smoothstep(0.3, 2.2, od)));   // contact AO around the walls
       }
     }
     for (const B of L.bridges) if (B.island === island.id && B.river) {

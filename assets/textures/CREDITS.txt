@@ -1,0 +1,18 @@
+Environment surface textures used by the default graphics mode ('immagini').
+All from Poly Haven (https://polyhaven.com), licence CC0 1.0 (public domain, no attribution required).
+Downloaded at 1k, resized to 512 px; *_col.jpg = colour, *_nh.jpg = normal (R,G) + height (B).
+The game only uses them as harmonised DETAIL over its own palette (src/core/surfaces.js).
+
+grass   leafy_grass             https://polyhaven.com/a/leafy_grass
+dirt    park_dirt               https://polyhaven.com/a/park_dirt
+sand    coast_sand_01           https://polyhaven.com/a/coast_sand_01
+rock    rock_face               https://polyhaven.com/a/rock_face
+cobble  cobblestone_floor_08    https://polyhaven.com/a/cobblestone_floor_08
+plaster painted_plaster_wall    https://polyhaven.com/a/painted_plaster_wall
+roof    clay_roof_tiles_02      https://polyhaven.com/a/clay_roof_tiles_02
+wood    weathered_planks        https://polyhaven.com/a/weathered_planks
+bark    bark_brown_02           https://polyhaven.com/a/bark_brown_02
+stone   old_stone_wall          https://polyhaven.com/a/old_stone_wall
+thatch  thatch_roof_angled      https://polyhaven.com/a/thatch_roof_angled
+
+With ?grafica=codice none of these files is requested: src/core/surfgen.js generates every layer in code.

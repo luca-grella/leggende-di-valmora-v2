@@ -10,6 +10,21 @@ import { rng, clamp, smoothstep } from '../core/math.js';
 import { N, N2 } from './shape.js';
 
 const TEMPLATES = new Map();
+const BLADES = [];
+/** One tapered, bent grass blade (height 1, leaning towards +z), normals biased upwards. */
+function bladeGeometry(v = 0) {
+  if (BLADES[v]) return BLADES[v];
+  const w = 0.12, bend = 0.25 + v * 0.15;
+  const P = [-w / 2, 0, 0, w / 2, 0, 0, -w * 0.32, 0.5, bend * 0.3, w * 0.32, 0.5, bend * 0.3, 0, 1, bend];
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  g.setIndex([0, 1, 2, 1, 3, 2, 2, 3, 4]);
+  const nrm = [];
+  for (let i = 0; i < 5; i++) { const ny = 0.85, nz = -0.5; const l = Math.hypot(ny, nz); nrm.push(0, ny / l, nz / l); }
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  BLADES[v] = g;
+  return g;
+}
 
 /** Tree / plant templates (local, ground at y = 0). */
 function template(kind, C, variant = 0) {
@@ -21,50 +36,50 @@ function template(kind, C, variant = 0) {
   const light = new THREE.Color(C.leaf2).lerp(new THREE.Color('#fffbd0'), 0.18).getStyle();
   if (kind === 'round') {
     const h = variant ? 2.4 : 2.0;
-    b.cyl(0.17, 0.3, h + 0.4, 0, (h + 0.4) / 2, 0, C.trunk, { seg: 7, grad: 0.3 });
-    b.cyl(0.07, 0.1, 0.9, 0.35, h - 0.2, 0, C.trunk, { seg: 5, rz: -0.8 });
+    b.cyl(0.17, 0.3, h + 0.4, 0, (h + 0.4) / 2, 0, C.trunk, { surf: 'bark', seg: 7, grad: 0.3 });
+    b.cyl(0.07, 0.1, 0.9, 0.35, h - 0.2, 0, C.trunk, { surf: 'bark', seg: 5, rz: -0.8 });
     const top = h + 1.0;
-    b.sphere(1.55, 0, top, 0, C.leaf, { grad: 0.38, sy: 0.9 });
-    b.sphere(1.12, 0.95, top - 0.35, 0.35, C.leafDark, { grad: 0.35 });
-    b.sphere(1.08, -0.85, top - 0.3, -0.4, C.leaf, { grad: 0.35 });
-    b.sphere(1.0, 0.2, top + 0.85, 0.15, light, { grad: 0.25 });
-    if (variant) b.sphere(0.9, -0.3, top - 0.1, 0.95, C.leaf2, { grad: 0.3 });
+    b.sphere(1.55, 0, top, 0, C.leaf, { surf: 'leaf', lumpy: 2, grad: 0.38, sy: 0.9 });
+    b.sphere(1.12, 0.95, top - 0.35, 0.35, C.leafDark, { surf: 'leaf', lumpy: 3, grad: 0.35 });
+    b.sphere(1.08, -0.85, top - 0.3, -0.4, C.leaf, { surf: 'leaf', lumpy: 4, grad: 0.35 });
+    b.sphere(1.0, 0.2, top + 0.85, 0.15, light, { surf: 'leaf', lumpy: 1, grad: 0.25 });
+    if (variant) b.sphere(0.9, -0.3, top - 0.1, 0.95, C.leaf2, { surf: 'leaf', lumpy: 2, grad: 0.3 });
   } else if (kind === 'palm') {
     const h = 4.6 + variant * 0.9, segs = 7;
     let px = 0;
     for (let i = 0; i < segs; i++) {
       const t = i / segs; px = Math.pow(t, 1.8) * h * 0.26;
-      b.cyl(0.19 - t * 0.06, 0.23 - t * 0.06, h / segs + 0.06, px, (i + 0.5) * h / segs, 0, i % 2 ? '#a77344' : '#c08c58', { seg: 8, rz: -Math.pow(t, 0.8) * 0.33 });
+      b.cyl(0.19 - t * 0.06, 0.23 - t * 0.06, h / segs + 0.06, px, (i + 0.5) * h / segs, 0, i % 2 ? '#a77344' : '#c08c58', { surf: 'bark', seg: 8, rz: -Math.pow(t, 0.8) * 0.33 });
     }
     const fr = 8;
     for (let k = 0; k < fr; k++) {
       const a = k / fr * Math.PI * 2 + R() * 0.3, droop = 0.35 + (k % 2) * 0.22;
       b.push(px + 0.05, h + 0.05, 0, a, 1, 0, -droop);
-      b.dome(1, 1.35, 0, 0, k % 2 ? C.leaf : C.leaf2, { sx: 1.5, sy: 0.18, sz: 0.42, grad: 0.3 });
-      b.dome(1, 2.55, -0.28, 0, k % 2 ? C.leafDark : C.leaf, { sx: 0.8, sy: 0.14, sz: 0.3, rz: -0.5 });
+      b.dome(1, 1.35, 0, 0, k % 2 ? C.leaf : C.leaf2, { surf: 'leaf', sx: 1.5, sy: 0.18, sz: 0.42, grad: 0.3 });
+      b.dome(1, 2.55, -0.28, 0, k % 2 ? C.leafDark : C.leaf, { surf: 'leaf', sx: 0.8, sy: 0.14, sz: 0.3, rz: -0.5 });
       b.pop();
     }
     for (let k = 0; k < 3; k++) b.sphere(0.17, px + Math.cos(k * 2.1) * 0.22, h - 0.18, Math.sin(k * 2.1) * 0.22, '#7a5230', { grad: 0.2 });
   } else if (kind === 'pine') {
     const s = 1 + variant * 0.25;
-    b.cyl(0.14 * s, 0.24 * s, 1.6 * s, 0, 0.8 * s, 0, C.trunk, { seg: 6, grad: 0.3 });
+    b.cyl(0.14 * s, 0.24 * s, 1.6 * s, 0, 0.8 * s, 0, C.trunk, { surf: 'bark', seg: 6, grad: 0.3 });
     const tiers = [[1.7, 2.2, 1.9], [1.32, 1.9, 3.0], [0.92, 1.7, 4.05]];
     tiers.forEach(([r, hh, y], i) => {
-      b.cone(r * s, hh * s, 0, y * s, 0, i === 2 ? C.leaf : i ? C.leaf : C.leafDark, { seg: 9, grad: 0.4 });
+      b.cone(r * s, hh * s, 0, y * s, 0, i === 2 ? C.leaf : i ? C.leaf : C.leafDark, { surf: 'leaf', seg: 9, grad: 0.4 });
       if (C.snow) b.cone(r * s * 0.62, hh * s * 0.42, 0, (y + hh * 0.31) * s, 0, '#f4f9ff', { seg: 9, grad: 0.1 });
     });
   } else if (kind === 'cypress') {
-    b.cyl(0.12, 0.18, 1.2, 0, 0.6, 0, C.trunk, { seg: 6 });
-    b.sphere(0.95, 0, 2.9, 0, C.leafDark, { sy: 2.5, grad: 0.4 });
-    b.sphere(0.6, 0.18, 4.2, 0.1, C.leaf, { sy: 1.6, grad: 0.3 });
+    b.cyl(0.12, 0.18, 1.2, 0, 0.6, 0, C.trunk, { surf: 'bark', seg: 6 });
+    b.sphere(0.95, 0, 2.9, 0, C.leafDark, { surf: 'leaf', lumpy: 3, sy: 2.5, grad: 0.4 });
+    b.sphere(0.6, 0.18, 4.2, 0.1, C.leaf, { surf: 'leaf', lumpy: 4, sy: 1.6, grad: 0.3 });
   } else if (kind === 'jungle') {
     const h = 5.5 + variant * 1.2;
-    b.cyl(0.32, 0.55, h, 0, h / 2, 0, '#8a5e3c', { seg: 8, grad: 0.35 });
+    b.cyl(0.32, 0.55, h, 0, h / 2, 0, '#8a5e3c', { seg: 8, grad: 0.35, surf: 'bark' });
     for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2 + 0.4; b.cone(0.3, 1.3, Math.sin(a) * 0.45, 0.55, Math.cos(a) * 0.45, '#7a5234', { seg: 5, rx: Math.cos(a) * 0.5, rz: -Math.sin(a) * 0.5 }); }
-    b.sphere(2.3, 0, h + 0.6, 0, C.leafDark, { sy: 0.55, grad: 0.4 });
-    b.sphere(1.7, 1.3, h + 0.2, 0.6, C.leaf, { sy: 0.6, grad: 0.35 });
-    b.sphere(1.6, -1.2, h + 0.3, -0.7, C.leaf, { sy: 0.6, grad: 0.35 });
-    b.sphere(1.3, 0.2, h + 1.25, -0.2, light, { sy: 0.6, grad: 0.25 });
+    b.sphere(2.3, 0, h + 0.6, 0, C.leafDark, { surf: 'leaf', lumpy: 1, sy: 0.55, grad: 0.4 });
+    b.sphere(1.7, 1.3, h + 0.2, 0.6, C.leaf, { surf: 'leaf', lumpy: 2, sy: 0.6, grad: 0.35 });
+    b.sphere(1.6, -1.2, h + 0.3, -0.7, C.leaf, { surf: 'leaf', lumpy: 3, sy: 0.6, grad: 0.35 });
+    b.sphere(1.3, 0.2, h + 1.25, -0.2, light, { surf: 'leaf', lumpy: 4, sy: 0.6, grad: 0.25 });
     for (let k = 0; k < 4; k++) { const a = k * 1.7; b.cyl(0.03, 0.03, 2.2, Math.sin(a) * 1.6, h - 1.2, Math.cos(a) * 1.6, '#4f9a3a', { seg: 4 }); }
   } else if (kind === 'cactus') {
     const g = '#5aa84a', g2 = '#6fbf55';
@@ -73,15 +88,21 @@ function template(kind, C, variant = 0) {
     arm(1, 1.1 + variant * 0.3, 0.9); arm(-1, 1.5, 0.7 + variant * 0.3);
     b.sphere(0.12, 0, 2.92, 0, '#ff6fa0');
   } else if (kind === 'bush') {
-    b.sphere(0.78, 0, 0.5, 0, C.leaf, { sy: 0.78, grad: 0.4 });
-    b.sphere(0.6, 0.6, 0.38, 0.2, C.leafDark, { sy: 0.8, grad: 0.4 });
-    b.sphere(0.55, -0.55, 0.36, -0.15, C.leaf2, { sy: 0.8, grad: 0.35 });
+    b.sphere(0.78, 0, 0.5, 0, C.leaf, { surf: 'leaf', lumpy: 1, sy: 0.78, grad: 0.4 });
+    b.sphere(0.6, 0.6, 0.38, 0.2, C.leafDark, { surf: 'leaf', lumpy: 2, sy: 0.8, grad: 0.4 });
+    b.sphere(0.55, -0.55, 0.36, -0.15, C.leaf2, { surf: 'leaf', lumpy: 3, sy: 0.8, grad: 0.35 });
     if (variant) for (let k = 0; k < 7; k++) { const a = k * 0.9, y = 0.55 + (k % 3) * 0.18; b.sphere(0.1, Math.sin(a) * 0.72, y, Math.cos(a) * 0.62, C.flowers[k % 2], { grad: 0 }); }
   } else if (kind === 'rock') {
     b.rock(1, 0, 0.25, 0, C.rock, { variant, sy: 0.9, grad: 0.3 });
     if (variant % 2) b.rock(0.55, 0.8, 0.15, 0.4, C.rockDark, { variant: variant + 1, grad: 0.3 });
   } else if (kind === 'tuft') {
-    for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 + R() * 0.5, r = 0.08 + R() * 0.06; b.cone(0.07, 0.42 + R() * 0.2, Math.sin(a) * r, 0.2, Math.cos(a) * r, C.grassDark, { seg: 3, open: true, rx: Math.cos(a) * 0.35, rz: -Math.sin(a) * 0.35, grad: 0.45 }); }
+    // a clump of curved blades (double-sided, soft up-facing normals like painted grass), dark roots → sunlit tips
+    const n = 9;
+    for (let k = 0; k < n; k++) {
+      const a = k / n * Math.PI * 2 + R() * 0.6, r = 0.03 + R() * 0.12, hh = 0.42 + R() * 0.36;
+      const tip = k % 3 === 0 ? C.meadow : k % 3 === 1 ? C.grass2 : C.grass;
+      b.add(bladeGeometry(Math.floor(R() * 3)), tip, { x: Math.sin(a) * r, z: Math.cos(a) * r, ry: a + (R() - 0.5) * 0.8, sx: 0.8 + R() * 0.5, sy: hh, sz: hh, grad: 0.7, jitter: 0.1 });
+    }
   } else if (kind === 'flower') {
     for (let k = 0; k < 4; k++) {
       const a = k * 1.9 + R(), r = k ? 0.16 + R() * 0.1 : 0, y = 0.2 + R() * 0.12, x = Math.sin(a) * r, z = Math.cos(a) * r;
@@ -120,7 +141,7 @@ export function buildVegetation(ctx, island, heightAt) {
     const k = kind + variant + (o.tag || '');
     if (!sets[k]) {
       const sway = o.sway ?? TREE_SHADE[kind] ?? 0.01, base = o.base ?? (kind === 'palm' ? 1.5 : kind === 'jungle' ? 3 : 0.9);
-      const mat = sway > 0 ? mats.wind(sway, base) : mats.solid;
+      const mat = sway > 0 ? mats.wind(sway, base, o.side ? { side: o.side } : {}) : mats.solid;
       sets[k] = st.set(k, template(kind, { ...C, petal: o.petal || '#ffffff' }, variant), mat, { castShadow: !o.noShadow, cap: o.cap, radius: o.radius });
     }
     return sets[k];
@@ -175,7 +196,7 @@ export function buildVegetation(ctx, island, heightAt) {
       // lush ground (Sun/Moon meadows): clusters of tufts everywhere, flower patches where the noise says so
       const small = C.snow ? 'tuft' : id === 'nebbia' && R() < 0.5 ? 'heather' : 'tuft';
       if (fl > 0.08 && R() < dens) { for (let k = 0; k < 6; k++) flower(jx + (R() - 0.5) * 3.4, jz + (R() - 0.5) * 3.4); }
-      const nT = Math.round((2 + R() * 3) * dens);
+      const nT = Math.round((8 + R() * 8) * dens);
       for (let k = 0; k < nT; k++) { const tx = jx + (R() - 0.5) * STEP, tz = jz + (R() - 0.5) * STEP; if (occ.at(tx, tz) === OCC.FREE) addSmall(small, tx, tz, heightAt(tx, tz), 0.7 + R() * 0.6); }
     } else if (o === OCC.ROAD || o === OCC.BUSY) {
       if (R() < 0.12 * dens && occ.at(jx, jz) === OCC.ROAD && !occ.clearOf(jx, jz, 0, OCC.ROAD)) { /* keep roads clean */ }
@@ -218,7 +239,7 @@ export function buildVegetation(ctx, island, heightAt) {
     setFor('flower', ci, { sway: 0.06, base: 0.05, petal: flowerCols[ci], noShadow: true, radius: 42, cap: 3500, tag: 'f' + ci }).add({ x, y: h - 0.02, z, ry: R() * 6, s: 0.9 + R() * 0.5 });
   }
   function addSmall(kind, x, z, h, s) {
-    setFor(kind, 0, { sway: kind === 'tuft' ? 0.35 : 0.05, base: 0.0, noShadow: true, radius: 40, cap: 6000 }).add({ x, y: h - 0.04, z, ry: R() * 6, s, color: tint(null, 0.15) });
+    setFor(kind, 0, { sway: kind === 'tuft' ? 0.6 : 0.05, base: 0.0, noShadow: true, radius: kind === 'tuft' ? 34 : 40, cap: kind === 'tuft' ? Math.round(9000 * Math.max(0.5, dens)) : 6000, side: kind === 'tuft' ? THREE.DoubleSide : 0 }).add({ x, y: h - 0.04, z, ry: R() * 6, s, color: tint(null, 0.15) });
   }
 
   st.finish();

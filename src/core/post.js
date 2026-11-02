@@ -89,11 +89,24 @@ uniform float exposure, warmth, saturation, contrast, vignette, lift, aspect, ti
 uniform vec3 tint;
 vec3 toSRGB(vec3 c){ return mix(c * 12.92, pow(c, vec3(0.41666)) * 1.055 - 0.055, step(0.0031308, c)); }
 float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
+vec3 neutralTM(vec3 color){
+  const float sc = 0.76, desat = 0.15;
+  float x = min(color.r, min(color.g, color.b));
+  float off = x < 0.08 ? x - 6.25 * x * x : 0.04;
+  color -= off;
+  float peak = max(color.r, max(color.g, color.b));
+  if (peak < sc) return color;
+  const float d = 1.0 - sc;
+  float np = 1.0 - d * d / (peak + d - sc);
+  color *= np / peak;
+  float g = 1.0 - 1.0 / (desat * (peak - np) + 1.0);
+  return mix(color, vec3(np), g);
+}
 void main(){
   vec3 c = tiltBlur() * exposure * tint;
-  // filmic shoulder: highlights roll off softly (sunlit sand, white walls) instead of clipping flat
-  c = mix(c, c / (1.0 + max(c - 0.75, 0.0) * 0.9), step(0.75, c));
-  c = min(c, vec3(1.0) + (c - 1.0) * 0.25);
+  // Khronos PBR Neutral tone mapping: soft highlight roll-off (sunlit sand, white walls, cobbles) that
+  // keeps hues and saturation (the toon palette stays vivid, no AgX/ACES greying)
+  c = neutralTM(c);
   c = toSRGB(clamp(c, 0.0, 1.0));
   // white balance (display space): warm = more red/yellow, less blue
   c *= vec3(1.0 + 0.07 * warmth, 1.0 + 0.02 * warmth, 1.0 - 0.08 * warmth);
@@ -105,7 +118,10 @@ void main(){
   c = clamp(c, 0.0, 1.0);
   c = mix(c, c * c * (3.0 - 2.0 * c), contrast);
   float l2 = dot(c, vec3(0.299, 0.587, 0.114));
-  c = mix(vec3(l2), c, saturation);
+  // selective: tame acid lime greens (grass/foliage) a touch, keep skin, sky, sea and roofs vivid
+  float lime = smoothstep(0.04, 0.2, c.g - max(c.r, c.b)) * smoothstep(0.0, 0.15, c.r - c.b + 0.05);
+  c = mix(vec3(l2), c, saturation * (1.0 - 0.14 * lime));
+  c = mix(c, c * vec3(1.02, 0.99, 0.94), lime * 0.35);
   // warm vignette
   vec2 d = (vUv - 0.5) * vec2(min(aspect, 1.8), 1.0);
   float v = smoothstep(0.35, 1.1, length(d) * 1.1) * vignette;
@@ -150,7 +166,7 @@ export function createPost({ renderer, scene, camera, ctx }) {
   composer.addPass(scenePass); composer.addPass(bloomPass); composer.addPass(tiltPass); composer.addPass(finalPass);
 
   // base parameters; the time of day adds an offset on top when `auto`
-  const params = { warmth: 0.07, saturation: 1.12, vignette: 0.26, contrast: 0.16, exposure: 1.04, bloom: 0.45, lift: 0.012, tilt: 1 };
+  const params = { warmth: 0.08, saturation: 1.06, vignette: 0.24, contrast: 0.2, exposure: 0.98, bloom: 0.45, lift: 0.012, tilt: 1 };
   const _ndc = new THREE.Vector3();
   let focusY = 0.45, heightPx = size.y * pr;
   const live = { warmth: params.warmth, sat: params.saturation, exposure: 1, night: 0 };

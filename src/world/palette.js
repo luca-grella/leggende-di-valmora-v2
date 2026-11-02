@@ -3,12 +3,12 @@
 import { PALETTE } from '../core/toon.js';
 
 const base = {
-  grass: PALETTE.grass, grass2: PALETTE.grass2, grassDark: '#5fae3e', meadow: '#a8dc62',
+  grass: '#72c04a', grass2: '#93cf58', grassDark: '#559f3c', meadow: '#a9d466',
   sand: PALETTE.sand, sandWet: '#e2c286', bed: '#7fd6c4', bedDeep: '#2a8fa8',
   path: PALETTE.path, path2: '#c99d62', plaza: '#efd9b0', plaza2: '#e2c89a',
   rock: PALETTE.rock, rockDark: '#94806c', cliff: '#d8c6a4',
   tallGrass: PALETTE.tallGrass, tallGrassTip: '#6fc24a',
-  leaf: '#5cb848', leaf2: '#7fd05a', leafDark: '#3f9a3e', trunk: '#9a6a43',
+  leaf: '#52ae46', leaf2: '#76c656', leafDark: '#3a8d3e', trunk: '#8f6242',
   wall: PALETTE.wall, wall2: '#ffe6c2', roofs: [PALETTE.roofCoral, PALETTE.roofTeal, PALETTE.roofSun, PALETTE.roofLilac],
   wood: PALETTE.wood, woodDark: '#8a5a36', trim: '#ffffff', door: ['#3fa6d9', '#e8674a', '#f5b83d', '#7fc24a', '#9b7fd1'],
   flowers: [PALETTE.pink, PALETTE.yellow, '#ffffff', '#ff8a5c', '#b48cff'],
