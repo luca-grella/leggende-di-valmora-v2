@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="../icons/icon.svg"><title>Sandbox · Creatures</title>
+<link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/hud.css"><link rel="stylesheet" href="../css/sheets.css"><link rel="stylesheet" href="../css/battle.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff}#game{position:fixed;inset:0}
+#bar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font:600 13px ui-rounded,system-ui;z-index:5;max-width:96vw}
+#bar button{border:3px solid #2a2140;border-radius:14px;background:#fff;padding:6px 10px;font:inherit;color:#2a2140}
+#name{position:fixed;top:calc(10px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);font:800 20px ui-rounded,system-ui;color:#2a2140;background:#fffd;border:3px solid #2a2140;border-radius:16px;padding:4px 14px;z-index:5}</style>
+</head><body><div id="game"></div><div id="ui"></div><div id="name"></div><div id="bar"></div>
+<script type="module">
+// Creatures bench: ?species=<id> shows one Velmon close (◀ ▶ to browse, anim buttons), ?gallery all 45 at once.
+import { boot } from './boot.js';
+const ctx = await boot(['creatures']);
+const C = ctx.creatures, ids = Object.keys(C.SPECIES);
+const params = new URLSearchParams(location.search);
+if (ctx.stage?.dummy) ctx.stage.dummy.visible = false;
+const nameEl = document.getElementById('name'), bar = document.getElementById('bar');
+let models = [];
+const clear = () => { models.forEach(m => m.dispose()); models = []; };
+function gallery() {
+  clear(); nameEl.textContent = 'Velmondex · 45 specie';
+  const cols = 9;
+  ids.forEach((id, i) => {
+    const m = C.createModel(id); const c = i % cols, r = Math.floor(i / cols);
+    m.object.position.set((c - (cols - 1) / 2) * 1.75, 0, -r * 1.9 + 3); ctx.scene.add(m.object); models.push(m);
+  });
+  ctx.cameraRig.shot({ position: { x: 0, y: 7.5, z: 12 }, target: { x: 0, y: 0.2, z: -1.2 }, fov: 45 }, { ease: 'cut' });
+}
+let cur = Math.max(0, ids.indexOf(params.get('species') || 'germoglio'));
+function single() {
+  clear(); const id = ids[cur]; const sp = C.SPECIES[id];
+  nameEl.textContent = `${sp.name} · ${sp.types.join('/')}`;
+  const m = C.createModel(id); m.object.position.set(0, 0, 0); m.object.rotation.y = 0.35; ctx.scene.add(m.object); models.push(m);
+  const h = m.height;
+  ctx.cameraRig.shot({ position: { x: 0.9 * h + 0.6, y: h * 0.75 + 0.3, z: h * 1.6 + 1.6 }, target: { x: 0, y: h * 0.45, z: 0 }, fov: 32 }, { ease: 'cut' });
+}
+const btn = (t, f) => { const b = document.createElement('button'); b.textContent = t; b.onclick = f; bar.append(b); };
+btn('◀', () => { cur = (cur + ids.length - 1) % ids.length; single(); });
+btn('▶', () => { cur = (cur + 1) % ids.length; single(); });
+for (const a of ['attack', 'special', 'hit', 'happy', 'faint', 'appear', 'walk', 'sleep', 'idle']) btn(a, () => models.forEach(m => m.play(a, { loop: a === 'walk' || a === 'sleep' || a === 'idle' })));
+btn('tutti', gallery);
+ctx.debug.register('gallery', gallery);
+ctx.debug.register('showSpecies', id => { cur = Math.max(0, ids.indexOf(id)); single(); return models[0]; });
+ctx.debug.register('models', () => models);
+if (params.has('gallery')) gallery(); else single();
+</script>
+</body></html>

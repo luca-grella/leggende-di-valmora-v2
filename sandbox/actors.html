@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="../icons/icon.svg"><title>Sandbox · Actors</title>
+<link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/hud.css"><link rel="stylesheet" href="../css/sheets.css"><link rel="stylesheet" href="../css/battle.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff}#game{position:fixed;inset:0}
+#bench{position:fixed;z-index:40;left:calc(8px + env(safe-area-inset-left));top:calc(8px + env(safe-area-inset-top));max-width:min(420px,calc(100vw - 16px));
+  font:700 12px ui-rounded,"SF Pro Rounded",system-ui,sans-serif;color:#2a2140}
+#bench .card{background:rgba(255,250,240,.92);border:3px solid #2a2140;border-radius:16px;box-shadow:0 4px 0 #2a2140;padding:8px 10px;max-height:46vh;overflow:auto}
+#bench.closed .card{display:none}
+#bench h3{margin:6px 0 4px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#7a4a8a}
+#bench button{font:800 11px ui-rounded,system-ui,sans-serif;color:#2a2140;background:linear-gradient(#fff,#e9f6ff);border:2px solid #2a2140;border-radius:10px;
+  padding:4px 7px;margin:2px;box-shadow:0 2px 0 #2a2140;cursor:pointer}
+#bench button.on{background:linear-gradient(#ffe27a,#f5b83d)}
+#bench select{font:800 12px ui-rounded,system-ui,sans-serif;border:2px solid #2a2140;border-radius:10px;padding:3px 6px;background:#fff}
+#toggle{font:900 14px ui-rounded,system-ui,sans-serif;background:linear-gradient(#ffe27a,#f5b83d);border:3px solid #2a2140;border-radius:14px;box-shadow:0 3px 0 #2a2140;padding:6px 12px;margin-bottom:6px}
+#say{position:fixed;z-index:41;left:50%;bottom:calc(140px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:80vw;display:none;
+  background:#fffaf0;border:3px solid #2a2140;border-radius:18px;box-shadow:0 4px 0 #2a2140;padding:10px 16px;font:800 15px ui-rounded,system-ui,sans-serif;color:#2a2140}
+</style>
+</head><body><div id="game"></div><div id="ui"></div>
+<div id="bench"><button id="toggle">🎭 Banco attori</button><div class="card" id="card"></div></div>
+<div id="say"></div>
+<script type="module">
+import { boot } from './boot.js';
+boot(['actors']).then(setup).catch(e => console.error('[sandbox] actors', e));
+function setup(ctx) {
+const A = ctx.actors, P = ctx.player;
+if (!A || !P) throw new Error('actors not loaded');
+if (ctx.stage?.dummy) ctx.stage.dummy.visible = false;
+if (!ctx.ui) ctx.createTouchControls?.(document.getElementById('ui'));
+
+// a simple speech bubble in place of the UI dialog
+const sayEl = document.getElementById('say');
+const say = (name, line) => new Promise(res => {
+  sayEl.textContent = `${name}: ${line}`; sayEl.style.display = 'block';
+  const done = () => { sayEl.style.display = 'none'; removeEventListener('pointerdown', done); removeEventListener('keydown', done); clearTimeout(t); res(); };
+  const t = setTimeout(done, 2600); setTimeout(() => { addEventListener('pointerdown', done); addEventListener('keydown', done); }, 200);
+});
+
+// a partner and a few villagers
+const partnerNpc = A.spawnNpc({ id: 'sofia', name: 'Sofia', look: A.looks.sofia, at: { x: 1.6, z: 2.4, facing: -2.4 }, wander: null, marker: '❤',
+  talk: async (n) => { n.human.talk(true); n.human.setExpression('smile'); await say('Sofia', 'Ciao! Che bella giornata per una passeggiata, vero?'); n.human.talk(false); } });
+const extras = [];
+for (let i = 0; i < 4; i++) {
+  const look = A.randomLook('bench:' + i, { sex: 'any', age: 'any' });
+  extras.push(A.spawnNpc({ id: 'villager' + i, name: ['Marco', 'Giulia', 'Nino', 'Teresa'][i], look, at: { x: -5 + i * 3, z: -4 - (i % 2) * 2, facing: 0 },
+    wander: { radius: 4 }, talk: async (n) => { n.human.talk(true); await say(n.name, 'Benvenuto a Valmora!'); n.human.talk(false); } }));
+}
+const partner = partnerNpc.human;
+P.teleport(0, 0, 0);
+
+// ---- bench UI ----
+const card = document.getElementById('card');
+const bench = document.getElementById('bench');
+document.getElementById('toggle').onclick = () => bench.classList.toggle('closed');
+if (innerWidth < 700) bench.classList.add('closed');
+let target = 'player';
+const who = () => (target === 'player' ? P.human : partner);
+const section = (title) => { const h = document.createElement('h3'); h.textContent = title; card.append(h); const d = document.createElement('div'); card.append(d); return d; };
+const btn = (parent, label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = (e) => { e.stopPropagation(); fn(b); }; parent.append(b); return b; };
+
+const sTarget = section('Personaggio');
+const sel = document.createElement('select');
+for (const k of ['player', 'sofia']) { const o = document.createElement('option'); o.value = k; o.textContent = k === 'player' ? 'Protagonista' : 'Sofia (partner)'; sel.append(o); }
+sel.onchange = () => { target = sel.value; };
+sTarget.append(sel);
+const lookSel = document.createElement('select');
+for (const k of Object.keys(A.looks)) { const o = document.createElement('option'); o.value = k; o.textContent = k; lookSel.append(o); }
+lookSel.value = 'sofia';
+lookSel.onchange = () => who().setLook(A.looks[lookSel.value]);
+sTarget.append(' aspetto: ', lookSel);
+
+const sClips = section('Animazioni');
+for (const c of A.allClips) btn(sClips, c, async () => { const h = who(); await h.play(c, {}); });
+const sExpr = section('Espressioni');
+for (const e of A.EXPRESSIONS) btn(sExpr, e, () => who().setExpression(e));
+btn(sExpr, '💬 parla', (b) => { b.classList.toggle('on'); who().talk(b.classList.contains('on')); });
+btn(sExpr, '👀 guarda', (b) => { b.classList.toggle('on'); const on = b.classList.contains('on'); P.human.lookAt(on ? partner : null); partner.lookAt(on ? P.human : null); });
+
+const sPairs = section('Coppia (con Sofia)');
+for (const k of A.PAIR_KINDS) btn(sPairs, k, async () => {
+  const p = P.position;
+  const anchor = { x: p.x, z: p.z + 1, facing: P.facing, y: k === 'lie_blanket' ? 0.5 : undefined };
+  await A.stagePair(k, { a: P.human, b: partnerNpc, anchor, fade: 0.5 });
+  ctx.cameraRig.closeUp?.(k === 'lie_blanket' ? 'romance_top' : 'romance', k === 'lie_blanket' ? { center: anchor, facing: anchor.facing } : { a: P.human, b: partner });
+});
+btn(sPairs, '✋ fine', async () => { await A.endPair({ a: P.human, b: partnerNpc }); ctx.cameraRig.release?.(); });
+
+const sCam = section('Camera');
+btn(sCam, 'Segui', () => ctx.cameraRig.release?.());
+btn(sCam, 'Primo piano', () => ctx.cameraRig.closeUp?.('portrait', { target: who() }));
+btn(sCam, 'Dialogo', () => ctx.cameraRig.closeUp?.('dialog', { a: partner, b: P.human }));
+
+// scenario helper for tools/shot.mjs & strip.mjs
+ctx.debug?.register?.('bench', { ctx, A, P, partner, partnerNpc, extras });
+}
+</script>
+</body></html>

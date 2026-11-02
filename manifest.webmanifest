@@ -1,0 +1,22 @@
+{
+  "name": "Leggende di Valmora",
+  "short_name": "Valmora",
+  "description": "Un gioco di avventura e cattura di creature nell'arcipelago di Valmora.",
+  "lang": "it",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
+  "orientation": "any",
+  "theme_color": "#8fd8ff",
+  "background_color": "#ffd27a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

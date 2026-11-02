@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="../icons/icon.svg"><title>Sandbox · Romance</title>
+<link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/hud.css"><link rel="stylesheet" href="../css/sheets.css"><link rel="stylesheet" href="../css/battle.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff}#game{position:fixed;inset:0}
+  /* test bench (sandbox only, shown with ?bench) */
+  #bench{position:fixed;z-index:90;left:max(8px,env(safe-area-inset-left));top:max(8px,env(safe-area-inset-top));display:none;flex-wrap:wrap;gap:4px;max-width:340px;
+    font:600 12px ui-rounded,system-ui,sans-serif;background:rgba(255,255,255,.85);border:3px solid #ff8fb8;border-radius:14px;padding:6px}
+  #bench button,#bench select{font:inherit;border:2px solid #ff5f9e;border-radius:10px;background:#fff;color:#7a2a50;padding:4px 7px}
+  #bench.on{display:flex}
+</style>
+</head><body><div id="game"></div><div id="ui"></div>
+<div id="bench">
+  <select id="girl"></select>
+  <button data-a="adult">18+ on/off</button>
+  <button data-a="talk">Parla</button>
+  <button data-a="date">Appuntamento</button>
+  <button data-a="home">Serata a casa</button>
+  <button data-a="osteria">🍝</button><button data-a="scooter">🛵</button><button data-a="bagno">🌊</button><button data-a="picnic">🧺</button>
+</div>
+<script type="module">
+import { boot } from './boot.js';
+const ctx = await boot(['world', 'actors', 'creatures', 'battle', 'story', 'romance', 'ui']);
+// Test bench for the romance scenes (?bench shows it).
+const bench = document.getElementById('bench');
+if (ctx.params.has('bench')) bench.classList.add('on');
+const sel = document.getElementById('girl');
+for (const g of ctx.romance?.girls || []) sel.append(new Option(`${g.name} (${g.mood}, ${g.when})`, g.id));
+bench.addEventListener('click', async e => {
+  const a = e.target.dataset?.a;
+  if (!a || !ctx.romance) return;
+  const id = sel.value, D = window.__valmora?.romance;
+  if (a === 'adult') {
+    ctx.save.state.settings.adult = !ctx.save.state.settings.adult;
+    ctx.bus.emit('settings:change', { key: 'adult', value: ctx.save.state.settings.adult });
+    ctx.ui?.toast?.('18+ ' + (ctx.save.state.settings.adult ? 'attivo' : 'spento'));
+    return;
+  }
+  ctx.save.state.settings.adult = true;
+  if (a === 'talk') return ctx.romance.talk(id);
+  if (a === 'date') { D?.set(id, 1); return D?.date(id); }
+  if (a === 'home') { D?.set(id, Math.max(2, ctx.romance.stage(id))); return D?.home(id); }
+  D?.set(id, 3);
+  return D?.outing(id, a);
+});
+</script>
+</body></html>

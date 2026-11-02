@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="../icons/icon.svg"><title>Sandbox · World</title>
+<link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/hud.css"><link rel="stylesheet" href="../css/sheets.css"><link rel="stylesheet" href="../css/battle.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff}#game{position:fixed;inset:0}
+#wtools{position:fixed;left:8px;top:calc(8px + env(safe-area-inset-top));z-index:60;display:flex;flex-wrap:wrap;gap:4px;max-width:96vw;font:600 12px ui-rounded,system-ui,sans-serif}
+#wtools button,#wtools select{border:0;border-radius:10px;padding:6px 9px;background:#fffffff0;color:#2a2140;box-shadow:0 2px 6px #0003}</style>
+</head><body><div id="game"></div><div id="ui"></div>
+<div id="wtools"><select id="wpoi"></select><button id="wgo">Vai</button><button id="wday">Giorno</button><button id="wdusk">Tramonto</button><button id="wnight">Notte</button></div>
+<script type="module">
+// World test bench: boots the core + world (+ actors when present). Without actors a chibi dummy from
+// the core test stage walks the islands (its own sky/sun are removed: World provides them).
+import { createCore } from '../src/core/index.js';
+const ctx = await createCore({ canvasParent: document.getElementById('game'), debug: true });
+try { const m = await import('../src/world/index.js'); ctx.world = await m.init(ctx); } catch (e) { console.error('[sandbox] world failed', e); }
+if (!ctx.params.has('noactors')) { try { const m = await import('../src/actors/index.js'); ctx.actors = (await m.init(ctx)) ?? null; } catch (e) { console.warn('[sandbox] actors not available', e?.message); } }
+if (!ctx.player?.object || ctx.player.placeholder) {
+  const st = ctx.createTestStage({ ground: false, dummy: true, lighting: false });
+  st.lights.sun.removeFromParent(); st.lights.hemi.removeFromParent(); st.sky?.removeFromParent();
+  if (ctx.world) ctx.toon.trackSun(ctx.world.sun, { radius: 26 });
+  const d = st.dummy;
+  ctx.player = { object: d, position: d.position, radius: 0.35, placeholder: true, get facing() { return d.rotation.y; },
+    teleport(x, z, f) { d.position.set(x, ctx.world?.groundY?.(x, z) ?? 0, z); if (f != null) d.rotation.y = f; ctx.cameraRig.snap(); } };
+}
+ctx.cameraRig.follow(ctx.player.object);
+ctx.startGame = (newGame = false) => { if (newGame) ctx.save.reset(); ctx.bus.emit('game:start', { newGame }); };
+const start = ctx.params.get('at') || 'alba.plaza';
+const p = ctx.world?.poi(start); if (p) ctx.player.teleport(p.x, p.z, p.facing);
+ctx.cameraRig.snap();
+ctx.loop.start();
+ctx.bus.emit('game:ready', { ctx });
+ctx.startGame(false);
+const sel = document.getElementById('wpoi');
+const keys = Object.keys(ctx.world?.POIS || {}).filter(k => !/^(house|center|shop|osteria|lab|depot|home)\./.test(k) || k.endsWith('.door'));
+sel.innerHTML = keys.map(k => `<option ${k === start ? 'selected' : ''}>${k}</option>`).join('');
+document.getElementById('wgo').onclick = () => window.__valmora.teleport(sel.value);
+document.getElementById('wday').onclick = () => ctx.time.set(11);
+document.getElementById('wdusk').onclick = () => ctx.time.set(18.4);
+document.getElementById('wnight').onclick = () => ctx.time.set(22);
+if (ctx.params.has('notools')) document.getElementById('wtools').remove();
+</script>
+</body></html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="../icons/icon.svg"><title>Sandbox · Battle</title>
+<link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/hud.css"><link rel="stylesheet" href="../css/sheets.css"><link rel="stylesheet" href="../css/battle.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff}#game{position:fixed;inset:0}
+#again{position:fixed;right:calc(12px + env(safe-area-inset-right));top:calc(12px + env(safe-area-inset-top));z-index:3;border:3px solid #2a2140;border-radius:14px;background:#fff;padding:6px 10px;font:700 13px ui-rounded,system-ui;color:#2a2140}</style>
+</head><body><div id="game"></div><div id="ui"></div><button id="again">Nuova lotta</button>
+<script type="module">
+// Battle bench: ?wild=<species>&lv=<n> (default random from r2), ?trainer for a 2-Velmon trainer battle,
+// ?notstart to not start automatically. Gives a test team + 10 Sfere when the party is empty.
+import { boot } from './boot.js';
+const ctx = await boot(['actors', 'creatures', 'battle', 'ui']);
+const C = ctx.creatures, q = new URLSearchParams(location.search);
+// a bare story bag for the bench (the full story area would start the prologue)
+if (!ctx.story) {
+  try {
+    const [{ createBag }, { ITEMS }] = await Promise.all([import('../src/story/bag.js'), import('../src/story/items.js')]);
+    ctx.story = { items: ITEMS, kit: { maxHp: C.maxHp, monName: C.nameOf } };
+    ctx.story.bag = createBag(ctx);
+  } catch (e) { console.warn('[sandbox] no bag', e); }
+}
+if (!C.team.party.length) {
+  for (const [s, l] of [['tizzone', 16], ['ondina', 12], ['voltino', 13]]) { const m = C.createMonster(s, l); C.team.add(m); C.dex.markCaught(s); }
+  ctx.story?.bag?.add?.('sfera', 10); ctx.story?.bag?.add?.('megasfera', 3); ctx.story?.bag?.add?.('pozione', 3);
+}
+async function fight() {
+  if (ctx.battle.active) return;
+  C.team.healAll();
+  if (q.has('trainer')) {
+    const foes = [C.createMonster('topolux', 11), C.createMonster('pulcino', 12)];
+    return ctx.battle.start({ kind: 'trainer', foes, trainer: { id: 'sandbox.t1', name: 'Escursionista Marco', look: ctx.actors?.looks?.fixer || ctx.actors?.looks?.player } });
+  }
+  const r = C.encounters.roll('r2');
+  const sp = q.get('wild') || r.species, lv = +(q.get('lv') || r.level);
+  return C.encounters.force(sp, lv);
+}
+document.getElementById('again').onclick = fight;
+ctx.debug.register('fight', fight);
+if (!q.has('notstart') && !q.has('manual')) setTimeout(fight, 400);
+</script>
+</body></html>

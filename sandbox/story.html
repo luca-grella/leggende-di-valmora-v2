@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="icon" href="../icons/icon.svg"><title>Sandbox · Story</title>
+<link rel="stylesheet" href="../css/base.css"><link rel="stylesheet" href="../css/hud.css"><link rel="stylesheet" href="../css/sheets.css"><link rel="stylesheet" href="../css/battle.css">
+<script type="importmap">{ "imports": { "three": "../vendor/three.module.min.js", "three/addons/": "../vendor/addons/" } }</script>
+<style>html,body{margin:0;height:100%;overflow:hidden;background:#8fd8ff}#game{position:fixed;inset:0}</style>
+</head><body><div id="game"></div><div id="ui"></div>
+<script type="module">
+// Story test bench. Boots every area whose entry file exists (while src/world/index.js is missing the world is
+// skipped: the story reads POIs from world/map.js and the test stage gives a lit ground around Borgo Alba).
+// Debug helpers: __valmora.story.{quest, talk, go, job, chapter, skipPrologue, objective, active, npcs, live}.
+// URL: ?newgame (fresh save + intro), ?skipintro (prologue skipped with a starter), ?chapter=2 (jump to a chapter).
+import { boot } from './boot.js';
+const exists = async p => { try { const r = await fetch(p, { method: 'HEAD', cache: 'no-store' }); return r.ok; } catch { return false; } };
+const use = [];
+for (const a of ['world', 'actors', 'creatures', 'battle', 'story', 'romance', 'ui']) if (await exists(`../src/${a}/index.js`)) use.push(a);
+const ctx = await boot(use);
+const ch = +(ctx.params.get('chapter') || 0);
+if (ch && ctx.story?.chapters) ctx.story.chapters.debugChapter(ch);
+</script>
+</body></html>
