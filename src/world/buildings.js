@@ -297,7 +297,8 @@ export function buildOsteria(ctx, def) {
     b.cyl(0.55, 0.55, 0.07, sx * 1.6, 0.76, pz, '#ffffff', { seg: 12 }); b.cyl(0.06, 0.06, 0.75, sx * 1.6, 0.38, pz, '#5a4a3a', { seg: 6 });
     for (const s2 of [-1, 1]) b.box(0.4, 0.45, 0.4, sx * 1.6 + s2 * 0.75, 0.23, pz, '#b97b47', { round: 0.06 });
   }
-  b.pop();
+  // (only frame() pushed here: an extra pop used to drop the collider at the world origin, i.e. an invisible
+  //  wall around the well of Borgo Alba, while the osteria itself could be walked through)
   b.rect(0, 0, w / 2 + 0.05, d / 2 + 0.05, 0, 'building');
   b.pop();
   return { colliders: b.colliders };

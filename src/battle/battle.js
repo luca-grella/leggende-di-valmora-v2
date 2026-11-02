@@ -90,7 +90,7 @@ export class BattleRun {
       return { position: pos, target: tgt, fov: portrait ? 40 : 34 };
     }
     const pos = portrait
-      ? ally.clone().addScaledVector(fw, -4.0 - big * 1.2).addScaledVector(rt, 1.0).setY(ally.y + 2.0 + big * 1.0)
+      ? ally.clone().addScaledVector(fw, -4.0 - big * 1.2).addScaledVector(rt, 1.55).setY(ally.y + 2.0 + big * 1.0)
       : ally.clone().addScaledVector(fw, -2.3 - big * 0.7).addScaledVector(rt, 1.7 + big * 0.3).setY(ally.y + 1.15 + big * 0.6);
     const tgt = ally.clone().lerp(foe, portrait ? 0.56 : 0.5); tgt.y += big * (portrait ? 0.3 : 0.4);
     if (!portrait) tgt.addScaledVector(rt, -0.25);

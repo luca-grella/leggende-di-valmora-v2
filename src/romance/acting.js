@@ -202,8 +202,8 @@ export function createActing(ctx, { clock, S, cams }) {
     if (Number.isFinite(facing)) await race(h.face(facing, { dur: 0.45 }), 1.5);
   }
   /** Sit on the sofa seat (walks to its front, turns, sits back onto it). */
-  async function sitSofa(h, set, dr, { clip = 'sit_idle', turn = 0 } = {}) {
-    const s = set.sofa, p = s.at(0.05, dr);
+  async function sitSofa(h, set, dr, { clip = 'sit_idle', turn = 0, fwd = 0.05 } = {}) {
+    const s = set.sofa, p = s.at(fwd, dr);
     if (h.grounded && h.clip !== 'sit_idle' && h.clip !== 'sit_feet') await standUp(h);
     if (h.grounded) {
       // already on the sofa: slide along the seat and turn, no standing up
@@ -270,7 +270,9 @@ export function createActing(ctx, { clock, S, cams }) {
     } else if (state === 'feet' && set.sofa) {
       const s = set.sofa;
       // she sits in the middle of the sofa (feet free), he kneels in front of her right foot
-      const seatOn = sitSofa(b, set, -0.05, { clip: 'sit_feet' });
+      // (perched a little forward: with her legs stretched out the knees clear the cushion lip, so the shins
+      //  never pass through the seat front)
+      const seatOn = sitSofa(b, set, -0.05, { clip: 'sit_feet', fwd: 0.16 });
       if (a.grounded && st === 'sofa') await standUp(a);
       const k = s.at(0.98, -0.12);
       await Promise.all([seatOn, (async () => { await clock.wait(0.3); await kneel(a, { ...k, facing: s.f + PI }, 'kneel_sit', set.floorY); })()]);

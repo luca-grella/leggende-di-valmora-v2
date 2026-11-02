@@ -38,7 +38,10 @@ if (uOccR > 0.0) {
   // 4x4 ordered dither: soft-looking see-through without transparency sorting
   vec2 q = mod(floor(gl_FragCoord.xy), 4.0);
   float th = (mod(q.x + q.y * 2.0, 4.0) * 4.0 + mod(q.y + q.x * 3.0, 4.0) + 0.5) / 16.0;
-  if (k * 0.82 > th) discard;
+  // close to the player: a soft see-through; well in front of the player (near the camera) foliage vanishes
+  // completely, so a big canopy never paints a dotted veil over the whole phone screen
+  float cap = mix(0.82, 1.05, smoothstep(3.0, 5.0, before));
+  if (k * cap > th) discard;
 }`;
 
 const WIND_VERT = /* glsl */`
