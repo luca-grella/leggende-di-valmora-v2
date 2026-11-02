@@ -71,6 +71,7 @@ self.SW_ASSETS = [
  "src/creatures/thumbs.js",
  "src/game.js",
  "src/main.js",
+ "src/romance/acting.js",
  "src/romance/cams.js",
  "src/romance/choices.js",
  "src/romance/fx.js",
