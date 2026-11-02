@@ -224,9 +224,20 @@ export function createCameraRig({ camera, ctx }) {
   }
 
   function computeExplore(dt) {
-    const portrait = !!ctx.viewport?.portrait;
-    const dist = cur.distance * rig.zoom * (portrait ? 1.15 : 1);
-    const pitch = (cur.pitch + (portrait ? 4 : 0)) * D2R, yaw = cur.yaw * D2R;
+    // Portrait phones: a 35° vertical fov leaves a ~16° horizontal view (a corridor of floor tiles). Widen the
+    // fov until the horizontal view is ≥ 32° and come closer so the player keeps a readable size; the lower
+    // 3/4 pitch then shows the street ahead and the buildings, Sun/Moon style.
+    const aspect = ctx.viewport?.aspect || camera.aspect || 1;
+    let dist = cur.distance * rig.zoom, fov = cur.fov;
+    if (aspect < 1) {
+      const hf = 2 * Math.atan(Math.tan(fov * D2R / 2) * aspect), want = 32 * D2R;
+      if (hf < want) {
+        const vf = Math.min(62 * D2R, 2 * Math.atan(Math.tan(want / 2) / aspect));
+        dist *= Math.min(1, Math.tan(fov * D2R / 2) / Math.tan(vf / 2) * 1.55);
+        fov = vf / D2R;
+      }
+    }
+    const pitch = (cur.pitch - 5) * D2R, yaw = cur.yaw * D2R;
     if (rig.followed) {
       wpos(rig.followed, tmp);
       const jump = hasFocus ? tmp.distanceToSquared(lastFollowed) : Infinity;
@@ -249,7 +260,7 @@ export function createCameraRig({ camera, ctx }) {
       explorePose.look.x + Math.sin(yaw) * Math.cos(pitch) * dist,
       explorePose.look.y + Math.sin(pitch) * dist,
       explorePose.look.z + Math.cos(yaw) * Math.cos(pitch) * dist);
-    explorePose.fov = cur.fov;
+    explorePose.fov = fov;
   }
 
   // per-axis critically damped spring (omega: horizontal 6.5, vertical 4.5 → soft on stairs/slopes)

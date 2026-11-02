@@ -73,6 +73,8 @@ export function createHaptics(ctx) {
   const enabled = () => ctx.save?.state?.settings?.haptics !== false;
   return function haptic(pattern = 12) {
     if (!enabled()) return;
+    // before the first tap the browser blocks vibration (and logs a console error): skip silently
+    if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return;
     try {
       if (typeof navigator.vibrate === 'function') { navigator.vibrate(pattern); return; }
       if (isIOS()) {

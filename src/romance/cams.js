@@ -28,8 +28,56 @@ export function createCams(ctx) {
    * Glide to a shot, then a slow push-in drift. `live` (optional) is a function returning the target point
    * every frame, so the frame follows the actors while their poses settle (sitting down, leaning in).
    */
+  // ---- keep the lens out of furniture and walls: walk the camera in front of the first solid surface
+  //      between the couple and the lens (or lift it), so no sofa arm / wall / bed fills the frame
+  const ray = new THREE.Raycaster(), _d = new THREE.Vector3();
+  function solids() {
+    const out = [];
+    ctx.scene.traverseVisible(o => {
+      if (!o.isMesh || o.isSkinnedMesh || o.isInstancedMesh || o.userData?.noOcclude) return;
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (!m || m.side === THREE.BackSide || (m.transparent && m.opacity < 0.6) || m.depthWrite === false) return;
+      for (let p = o.parent; p; p = p.parent) if (p.name === 'human' || p.userData?.velmon) return;
+      out.push(o);
+    });
+    return out;
+  }
+  function clearShot(spec) {
+    const tgt = spec.target?.isVector3 ? spec.target : null;
+    if (!tgt || !spec.position) return spec;
+    let list = null;
+    const pos = spec.position.clone();
+    // sample the centre of the frame AND its lower part (chests, left and right): foreground furniture (a
+    // sofa back, the foot of a bed) usually sits below the line of sight to the faces
+    const side = new THREE.Vector3(), from = new THREE.Vector3(), dir = new THREE.Vector3(), hp = new THREE.Vector3();
+    const OFFS = [[0, 0], [0, -0.36], [0.3, -0.4], [-0.3, -0.4]];
+    for (let k = 0; k < 4; k++) {
+      _d.subVectors(pos, tgt); const dist = _d.length(); if (dist < 0.3) break;
+      _d.normalize();
+      side.set(-_d.z, 0, _d.x); if (side.lengthSq() < 1e-6) side.set(1, 0, 0); side.normalize();
+      let hit = null;
+      try {
+        list = list || solids();
+        for (const [sx, sy] of OFFS) {
+          from.copy(tgt).addScaledVector(side, sx); from.y += sy;
+          dir.subVectors(pos, from); const dd = dir.length(); dir.normalize();
+          ray.set(from, dir); ray.near = sy ? 0.25 : 0.35; ray.far = dd + 0.25;
+          const h = ray.intersectObjects(list, false)[0];
+          // distance of the obstacle from the target, measured along the target→camera line
+          if (h) { const along = hp.copy(h.point).sub(tgt).dot(_d); if (!hit || along < hit.distance) hit = { distance: along }; }
+        }
+      } catch { hit = null; }
+      if (!hit) return { ...spec, position: pos };
+      const safe = hit.distance - 0.22;
+      if (safe >= Math.max(0.9, dist * 0.55)) { pos.copy(tgt).addScaledVector(_d, safe); return { ...spec, position: pos }; }
+      pos.y += 0.45;                                       // too close: look from a little higher and retry
+    }
+    return { ...spec, position: pos };
+  }
+
   function go(spec, dur, drift = true, live = null) {
     const my = ++token;
+    spec = clearShot(spec);
     const p = rig().shot(live ? { ...spec, target: live } : spec, { dur, ease: dur ? 'inOut' : 'cut' });
     if (drift) p.then(() => {
       if (my !== token) return;
@@ -88,6 +136,37 @@ export function createCams(ctx) {
       position.y = mid.y + 0.1 + d * 0.06;
       const target = new THREE.Vector3(mid.x, mid.y - V * 0.12, mid.z);
       const live = () => { headOf(a, _la); headOf(b, _lb); return _lt.addVectors(_la, _lb).multiplyScalar(0.5).setY((_la.y + _lb.y) / 2 - V * 0.12); };
+      return go({ position, target, fov }, dur, true, live);
+    },
+
+    /**
+     * Full two-shot for the feet actions (massage / kiss / lick her feet): side-on, both of them head to
+     * toe, so what he does is clearly visible together with both faces. A medium-wide shot of the whole
+     * pair, never a close-up of the foot.
+     */
+    full(a, b, { dur = 1.1, fov = 32 } = {}) {
+      const A = headOf(a), B = headOf(b);
+      const oa = (a?.object || a)?.position, ob = (b?.object || b)?.position;
+      const floor = Math.min(oa?.y ?? A.y - 1.4, ob?.y ?? B.y - 1.4);
+      const top = Math.max(A.y, B.y) + 0.22;
+      const axis = new THREE.Vector3(B.x - A.x, 0, B.z - A.z);
+      let s = axis.length();
+      if (s < 0.05) { const f = (b?.object || b)?.rotation?.y || 0; axis.set(Math.sin(f), 0, Math.cos(f)); s = 0.05; }
+      axis.normalize();
+      const n = new THREE.Vector3(-axis.z, 0, axis.x);
+      const mid = new THREE.Vector3().addVectors(A, B).multiplyScalar(0.5);
+      const sign = tmp.subVectors(ctx.camera.position, mid).dot(n) >= 0 ? 1 : -1;
+      n.multiplyScalar(sign);
+      const asp = aspect(), tanH = Math.tan((fov * D2R) / 2);
+      const V = (top - floor) + 0.3, H = s + 1.1;
+      const d = Math.max(V / (2 * tanH), H / asp / (2 * tanH)) * 1.04;
+      // slightly towards her side (her face opens to the lens), a little from above
+      const dir = new THREE.Vector3().copy(n).multiplyScalar(Math.cos(0.22)).addScaledVector(axis, Math.sin(0.22));
+      const cy = (top + floor) / 2;
+      const position = new THREE.Vector3().copy(mid).addScaledVector(dir, d);
+      position.y = cy + 0.35 + d * 0.12;
+      const target = new THREE.Vector3(mid.x, cy, mid.z);
+      const live = () => { headOf(a, _la); headOf(b, _lb); return _lt.addVectors(_la, _lb).multiplyScalar(0.5).setY(cy); };
       return go({ position, target, fov }, dur, true, live);
     },
 

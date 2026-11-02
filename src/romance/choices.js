@@ -16,6 +16,8 @@ export const ALLOWED_CHOICES = Object.freeze({
   lick_neck: { label: 'Leccale il collo', icon: '😘', pair: 'kiss_neck' },
   ear: { label: "Mordicchiale l'orecchio", icon: '😏', pair: 'ear_nibble' },
   hug: { label: 'Stringila a te', icon: '🤗', pair: 'hug' },
+  // agreed with Luca: undressing stops at the underwear (outfit swap behind a fade, never nudity)
+  undress: { label: 'Spogliatevi a vicenda', icon: '👙', pair: null, sub: 'Restando in intimo' },
   whisper: { label: "Sussurrale qualcosa all'orecchio", icon: '🗣️', pair: 'whisper' },
   guide: { label: 'Lasciati guidare da lei…', icon: '🔥', pair: 'guide' },
   continue: { label: 'Continua', icon: '➡️', pair: null },
@@ -43,6 +45,7 @@ export const CHOICE_FX = {
   ear: { hearts: 2, tight: true, sfx: 'heart' },
   hug: { hearts: 2, tight: true, sfx: 'heart' },
   whisper: { hearts: 1, tight: true, sfx: 'heart' },
+  undress: { hearts: 2, tight: false, sfx: 'heart' },
   guide: { hearts: 4, tight: true, sfx: 'heart' },
 };
 
@@ -51,6 +54,7 @@ export const CHOICE_GROUPS = [
   { id: 'baci', label: 'Baci', icon: '💋', items: ['kiss', 'kiss_neck', 'lick_neck', 'ear'] },
   { id: 'coccole', label: 'Coccole', icon: '🤗', items: ['hug', 'hair', 'whisper'] },
   { id: 'massaggi', label: 'Massaggi', icon: '💆', items: ['shoulders', 'back', 'legs', 'feet'] },
+  { id: 'intimo', label: 'Spogliatevi a vicenda', icon: '👙', items: ['undress'] },
   { id: 'piedi', label: 'Coccole ai piedi', icon: '👣', items: ['kiss_feet', 'lick_feet'] },
 ];
 
@@ -69,6 +73,7 @@ const GENERIC = {
   ear: ['Ehi, piano! ...No, non smettere.'],
   hug: ['Mi piace stare così.'],
   whisper: ['Ma che cose dici! ...Dillo ancora.'],
+  undress: ['Ehi... non guardarmi così, mi fai arrossire.', 'Va bene... ma solo fin qui, eh.', 'Che caldo che fa stasera, vero?'],
   guide: ['Chiudi gli occhi... e fidati di me.', 'Mmh... vedo che hai capito.'],
 };
 

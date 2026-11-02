@@ -219,7 +219,7 @@ function setup(ctx, p, smooth) {
       break;
     }
     case 'hug': {
-      put(a, at(-0.165, 0), f); put(b, at(0.165, 0), back);
+      put(a, at(-0.2, 0), f); put(b, at(0.2, 0), back);
       clip(a, 'hug'); clip(b, 'hug_high');
       a.setHandTarget('L', behind(b, 'spine', -0.07, 0.13, a, 1), { fade });
       a.setHandTarget('R', behind(b, 'spine', 0.0, 0.13, a, -1), { fade });
@@ -259,7 +259,7 @@ function setup(ctx, p, smooth) {
       const backRub = kind === 'massage_back';
       const seated = opts.seat === true;
       if (seated) { put(b, at(0, 0), f, seatY - SIT_H); clip(b, 'sit_idle'); put(a, at(-0.42, 0), f, floor); clip(a, 'idle'); }
-      else { put(b, at(0.05, 0), f); clip(b, 'sit_knees'); put(a, at(-0.42, 0), f); clip(a, 'kneel'); }
+      else { put(b, at(0.05, 0), f); clip(b, 'sit_knees'); put(a, at(-0.5, 0), f); clip(a, 'kneel'); }
       upper(a, 'massage');
       for (const [s, k, ph] of [['L', 1, 0], ['R', -1, Math.PI]]) {
         a.setHandTarget(s, (out, t) => {
@@ -320,9 +320,10 @@ function setup(ctx, p, smooth) {
       put(a, at(-0.06, -0.3), back, y); put(b, at(-0.06, 0.3), back, y);
       clip(a, 'lie_back'); clip(b, 'lie_back');
       look(a, b); look(b, a); expr(a, 'smile'); expr(b, 'blush');
-      const blanket = buildBlanket(ctx, { w: 1.5, l: 1.65, bodies: [-0.3, 0.3] });
-      const c = at(-0.46, 0);
-      blanket.position.set(c.x, y, c.z); blanket.rotation.y = f;
+      // wide and a little high: it must hide the bed's own duvet/sheets underneath
+      const blanket = buildBlanket(ctx, { w: 1.85, l: 1.75, bodies: [-0.3, 0.3] });
+      const c = at(-0.5, 0);
+      blanket.position.set(c.x, y + 0.08, c.z); blanket.rotation.y = f;
       ctx.scene.add(blanket); p.props.push(blanket);
       break;
     }

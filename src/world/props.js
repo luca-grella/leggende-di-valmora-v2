@@ -202,6 +202,7 @@ export function addProp(b, p, heightAt, C = {}) {
       b.box(len, 0.25, 0.8, 0, 0.12, 0, '#c8a070', { round: 0.08 });
       b.box(len - 0.15, 0.1, 0.65, 0, 0.27, 0, '#8a6a4a', { round: 0.04 });
       for (let k = 0; k < Math.round(len * 3); k++) b.sphere(0.12, -len / 2 + 0.2 + k * (len - 0.4) / Math.max(1, Math.round(len * 3) - 1), 0.42, (k % 2 - 0.5) * 0.3, (C.flowers || ['#ff5f9e', '#ffd23f'])[k % (C.flowers || [1, 2]).length]);
+      b.rect(0, 0, len / 2, 0.4);
       break;
     }
     case 'picnic':

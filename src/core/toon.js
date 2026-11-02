@@ -15,18 +15,23 @@ export const PALETTE = {
   night: '#22305e', outline: '#2a2140', shadow: '#5b5f9e', skin: '#f6d0b1',
 };
 
-// Ramp bands (input: dot(N,L)*0.5+0.5): shade value, mid value, band edges and edge softness.
-const SHADE = 0.5, MID = 0.8;
-const EDGE_LO = 0.47, EDGE_HI = 0.6, SOFT = 0.035;
+// Soft volumetric ramp (v2 "near real" pass, after Luca's feedback): input dot(N,L)*0.5+0.5 (half-Lambert).
+// No hard bands any more: a smooth, wide terminator (painted/plush look, like Sun/Moon's in-game models)
+// with a low floor so forms read in 3D; the shade is tinted cool and filled by the hemisphere light.
+const SHADE = 0.34, MID = 0.72;
+const EDGE_LO = 0.3, EDGE_HI = 0.78;
 
-/** Build the shared gradient ramp (256×1, linear filtering → soft but crisp band edges). */
+/** Build the shared gradient ramp (256×1, linear filtering → smooth gradient). */
 function buildRamp() {
   const N = 256, data = new Uint8Array(N * 4);
   const ss = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
   for (let i = 0; i < N; i++) {
     const x = i / (N - 1);
-    const v = SHADE + (MID - SHADE) * ss(EDGE_LO - SOFT, EDGE_LO + SOFT, x) + (1 - MID) * ss(EDGE_HI - SOFT, EDGE_HI + SOFT, x);
-    const b = Math.round(v * 255);
+    // smooth body shading + a slightly brighter "key" plateau on the lit side
+    const body = ss(EDGE_LO, EDGE_HI, x);
+    const key = ss(0.66, 0.95, x);
+    const v = SHADE + (MID - SHADE) * body + (1 - MID) * key;
+    const b = Math.round(Math.min(1, v) * 255);
     data.set([b, b, b, 255], i * 4);
   }
   const t = new THREE.DataTexture(data, N, 1, THREE.RGBAFormat);
@@ -36,34 +41,81 @@ function buildRamp() {
   return t;
 }
 
+/** Tileable value-noise texture (R: soft fbm for cloud shadows, G: finer detail). */
+function buildNoise(size = 128) {
+  let seed = 1337;
+  const R = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const oct = [[4, 0.5], [8, 0.27], [16, 0.15], [32, 0.08]];
+  const grids = oct.map(([n]) => { const g = new Float32Array(n * n); for (let i = 0; i < g.length; i++) g[i] = R(); return g; });
+  const data = new Uint8Array(size * size * 4);
+  const sample = (k, x, y) => {
+    const [n] = oct[k], g = grids[k];
+    const fx = x / size * n, fy = y / size * n, x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = fx - x0, ty = fy - y0, sx = tx * tx * (3 - 2 * tx), sy = ty * ty * (3 - 2 * ty);
+    const at = (i, j) => g[((j % n + n) % n) * n + ((i % n + n) % n)];
+    const a0 = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx, a1 = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx;
+    return a0 + (a1 - a0) * sy;
+  };
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    let v = 0; for (let k = 0; k < 4; k++) v += sample(k, x, y) * oct[k][1];
+    const d = sample(2, x * 3 + 11, y * 3 + 5) * 0.6 + sample(3, x * 2, y * 2) * 0.4;
+    const o = (y * size + x) * 4;
+    data[o] = Math.max(0, Math.min(255, v * 255)); data[o + 1] = Math.max(0, Math.min(255, d * 255)); data[o + 2] = 128; data[o + 3] = 255;
+  }
+  const t = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.generateMipmaps = true; t.needsUpdate = true; t.name = 'world-noise';
+  return t;
+}
+
 const S = SHADE.toFixed(3);
-// Replacement for three's lights_toon_pars_fragment: tinted shade band; cast shadows clamp to the
-// shade band (toon look) instead of dropping to ambient-only darkness.
+// Replacement for three's lights_toon_pars_fragment: smooth ramp, cool tinted shade, soft cast shadows
+// (they fall towards the shade floor, never to black), drifting cloud shadows on the sun light and a
+// soft Blinn-Phong sheen (gives materials a touch of real surface response).
 const TOON_LIGHTS = /* glsl */`
 varying vec3 vViewPosition;
 struct ToonMaterial { vec3 diffuseColor; };
 uniform vec3 uShadeTint;
+uniform mat4 uCamWorld;
+uniform sampler2D uNoiseTex;
+uniform vec4 uCloud;      // offset.xy, strength, cover
+uniform float uSheen;
 float toonRamp( float dotNL ) {
   vec2 coord = vec2( dotNL * 0.5 + 0.5, 0.5 );
   #ifdef USE_GRADIENTMAP
     return texture2D( gradientMap, coord ).r;
   #else
-    return mix( ${S}, 1.0, smoothstep( 0.5, 0.56, coord.x ) );
+    return mix( ${S}, 1.0, smoothstep( 0.3, 0.8, coord.x ) );
   #endif
 }
+float valmoraCloud() {
+  if ( uCloud.z <= 0.0 ) return 1.0;
+  vec3 wp = ( uCamWorld * vec4( -vViewPosition, 1.0 ) ).xyz;
+  float n = texture2D( uNoiseTex, wp.xz * 0.0045 + uCloud.xy ).r;
+  float c = smoothstep( 1.0 - uCloud.w, 1.0 - uCloud.w + 0.22, n );
+  return 1.0 - uCloud.z * c;
+}
 void RE_Direct_Toon( const in IncidentLight directLight, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in ToonMaterial material, inout ReflectedLight reflectedLight ) {
-  float g = toonRamp( dot( geometryNormal, directLight.direction ) );
+  float ndl = dot( geometryNormal, directLight.direction );
+  float g = toonRamp( ndl );
   vec3 col = directLight.color;
+  float lit = 1.0;
   #if NUM_DIR_LIGHTS > 0
   if ( dot( directLight.direction, directionalLights[ 0 ].direction ) > 0.9999 ) {
     vec3 full = directionalLights[ 0 ].color;
     float k = clamp( dot( col, vec3( 1.0 ) ) / max( dot( full, vec3( 1.0 ) ), 1e-4 ), 0.0, 1.0 );
-    g = mix( min( g, ${S} ), g, k );
+    k *= valmoraCloud();
+    lit = k;
+    g = mix( min( g, ${S} ) * 0.9, g, k );
     col = full;
   }
   #endif
-  vec3 tint = mix( uShadeTint, vec3( 1.0 ), smoothstep( ${S}, 1.0, g ) );
+  vec3 tint = mix( uShadeTint, vec3( 1.0 ), smoothstep( ${S}, 0.95, g ) );
   reflectedLight.directDiffuse += g * tint * col * BRDF_Lambert( material.diffuseColor );
+  // soft sheen: broad, faint highlight only where the sun really hits
+  vec3 hv = normalize( directLight.direction + geometryViewDir );
+  float sp = pow( max( dot( geometryNormal, hv ), 0.0 ), 28.0 ) * smoothstep( 0.0, 0.25, ndl ) * lit;
+  reflectedLight.directDiffuse += col * sp * uSheen * 0.05;   // (toon output ignores directSpecular)
 }
 void RE_IndirectDiffuse_Toon( const in vec3 irradiance, const in vec3 geometryPosition, const in vec3 geometryNormal, const in vec3 geometryViewDir, const in vec3 geometryClearcoatNormal, const in ToonMaterial material, inout ReflectedLight reflectedLight ) {
   reflectedLight.indirectDiffuse += irradiance * BRDF_Lambert( material.diffuseColor );
@@ -107,22 +159,29 @@ export function createToon({ renderer, quality }) {
   const shared = {
     uShadeTint: { value: new THREE.Color(0.62, 0.62, 0.95) },  // cool lilac multiplier for the shade band
     uRimColor: { value: new THREE.Color('#fff1d6') },
+    uCamWorld: { value: new THREE.Matrix4() },
+    uNoiseTex: { value: buildNoise() },
+    uCloud: { value: new THREE.Vector4(0, 0, 0, 0.42) },     // offset x/y, strength (0 = off), cover
+    uSheen: { value: 1 },
   };
   const cache = new Map();
   const outlineMats = new Map();
   const _c = new THREE.Color(), _d = new THREE.Vector3();
-  let sun = null, lastL = null;
+  let sun = null, lastL = null, cloudsOn = true, cloudDay = 1;
 
   /** Patch a MeshToonMaterial with the Valmora lighting model. */
-  function patch(m, { rim = 0, shadeTint = null } = {}) {
+  function patch(m, { rim = 0, shadeTint = null, sheen = 1 } = {}) {
     m.userData.rim = rim;
     m.userData.uRim = { value: rim };
+    m.userData.uSheen = m.userData.uSheen || { value: sheen };
     const shade = shadeTint ? { value: new THREE.Color(shadeTint) } : shared.uShadeTint;
     m.userData.uShadeTint = shade;
     m.onBeforeCompile = sh => {
       sh.uniforms.uShadeTint = shade;
       sh.uniforms.uRimColor = shared.uRimColor;
       sh.uniforms.uRim = m.userData.uRim;
+      sh.uniforms.uCamWorld = shared.uCamWorld; sh.uniforms.uNoiseTex = shared.uNoiseTex; sh.uniforms.uCloud = shared.uCloud;
+      sh.uniforms.uSheen = m.userData.uSheen;
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <lights_toon_pars_fragment>', TOON_LIGHTS + (rim > 0 ? '#define TOON_RIM\nuniform vec3 uRimColor;\nuniform float uRim;\n' : ''))
         .replace('#include <lights_fragment_end>', TOON_RIM);
@@ -152,7 +211,7 @@ export function createToon({ renderer, quality }) {
       });
       if (o.flatShading) m.flatShading = true;
       if (o.depthWrite === false) m.depthWrite = false;
-      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint });
+      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint, sheen: o.sheen ?? 1 });
       m.name = 'toon ' + k;
       cache.set(k, m);
       return m;
@@ -160,7 +219,8 @@ export function createToon({ renderer, quality }) {
     /** A fresh (uncached) toon material, safe to animate (colour, opacity, emissive). */
     matUnique(color = '#ffffff', o = {}) {
       const m = toon.mat(color, o).clone();
-      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint });
+      m.userData = { ...m.userData, uSheen: { value: o.sheen ?? 1 } };
+      patch(m, { rim: o.rim || 0, shadeTint: o.shadeTint, sheen: o.sheen ?? 1 });
       return m;
     },
     /** Shared vertex-colour toon material for merged scenery (white base × vertex colours). */
@@ -178,7 +238,7 @@ export function createToon({ renderer, quality }) {
      * color: a CSS colour or 'auto' (darkened mesh colour, Sun/Moon style). Returns root.
      * Meshes with userData.noOutline are skipped.
      */
-    outline(root, { width = 0.02, color = PALETTE.outline, skip } = {}) {
+    outline(root, { width = 0.015, color = PALETTE.outline, skip } = {}) {
       if (!quality?.outlines || !root) return root;
       const list = [];
       root.traverse(o => { if (o.isMesh && !o.isInstancedMesh && !o.userData.isOutline && !o.userData.noOutline && !(skip && skip(o))) list.push(o); });
@@ -229,9 +289,22 @@ export function createToon({ renderer, quality }) {
       lastL = L;
       const night = L.night ?? 0, warm = L.warmth ?? 0;
       // day: cool lilac shade; dusk: rosy violet; night: deep blue
-      shared.uShadeTint.value.setRGB(0.6 + 0.1 * warm - 0.08 * night, 0.62 - 0.05 * warm - 0.04 * night, 0.95 + 0.03 * night);
+      shared.uShadeTint.value.setRGB(0.74 + 0.1 * warm - 0.1 * night, 0.76 - 0.06 * warm - 0.06 * night, 0.98 + 0.02 * night);
+      // cloud shadows: strongest at midday, gone at night (the moon light stays even)
+      cloudDay = (1 - night) * (1 - 0.5 * warm);
       shared.uRimColor.value.set(L.rim || '#fff1d6');
     },
+    /** Called by the core after the camera update: camera matrix for world-space effects, cloud drift. */
+    frame(camera, dt = 1 / 60) {
+      camera.updateMatrixWorld();
+      shared.uCamWorld.value.copy(camera.matrixWorld);
+      const c = shared.uCloud.value;
+      c.x = (c.x + dt * 0.0016) % 1; c.y = (c.y + dt * 0.0009) % 1;
+      c.z = cloudsOn ? 0.3 * cloudDay : 0;
+    },
+    /** Drifting cloud shadows on/off (World turns them off indoors and in caves). */
+    set clouds(v) { cloudsOn = !!v; },
+    get clouds() { return cloudsOn; },
     /** Called by the core after the camera update: shadow camera follows `center`. */
     updateShadow(center) {
       if (!sun || !sun.castShadow || !center) return;

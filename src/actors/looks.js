@@ -3,8 +3,8 @@
 import { rng } from '../core/math.js';
 
 export const HAIR_STYLES = ['short', 'spiky', 'bob', 'long', 'ponytail', 'bun', 'curly', 'braid', 'pixie', 'twintails', 'bald'];
-export const TOP_STYLES = ['tshirt', 'tank', 'shirt', 'blouse', 'hoodie', 'jacket', 'dress', 'uniform', 'coat', 'camisole', 'swimsuit'];
-export const BOTTOM_STYLES = ['shorts', 'pants', 'skirt', 'long_skirt', 'pyjama', 'swim_shorts', 'none'];
+export const TOP_STYLES = ['tshirt', 'tank', 'shirt', 'blouse', 'hoodie', 'jacket', 'dress', 'uniform', 'coat', 'camisole', 'swimsuit', 'underwear'];
+export const BOTTOM_STYLES = ['shorts', 'pants', 'skirt', 'long_skirt', 'pyjama', 'swim_shorts', 'briefs', 'none'];
 export const SHOE_STYLES = ['sneakers', 'sandals', 'boots', 'heels', 'flats', 'barefoot'];
 export const HAT_STYLES = ['cap', 'sunhat', 'beanie', 'chef', 'guard', 'eclissi'];
 export const ACCESSORIES = ['backpack', 'glasses', 'sunglasses', 'scarf', 'necklace', 'bag'];
@@ -32,8 +32,12 @@ export function normalizeLook(raw = {}) {
   const hat = typeof L.hat === 'string' ? { style: L.hat } : (L.hat || null);
   const topStyle = pickIn(top.style, TOP_STYLES, 'tshirt');
   let bottomStyle = pickIn(bottom.style, BOTTOM_STYLES, sex === 'f' ? 'skirt' : 'pants');
-  // 'none' is only valid under a dress, a swimsuit or a long coat; anything else gets shorts (never underwear)
+  // 'none' is only valid under a dress, a swimsuit or a long coat; anything else gets shorts
   if (bottomStyle === 'none' && !['dress', 'swimsuit', 'coat'].includes(topStyle)) bottomStyle = 'shorts';
+  // underwear (romance scenes only: outfit swap down to underwear, never less) is always a full set:
+  // bra + briefs for her, briefs for him; briefs never appear without the underwear top
+  if (topStyle === 'underwear') bottomStyle = 'briefs';
+  else if (bottomStyle === 'briefs') bottomStyle = 'shorts';
   // a men's swimsuit is swim shorts with no top: keep it consistent
   if (topStyle === 'swimsuit' && sex === 'm' && !['swim_shorts', 'shorts'].includes(bottomStyle)) bottomStyle = 'swim_shorts';
   const defHair = age === 'elder' ? '#d8d4cc' : '#5a3a24';
@@ -150,4 +154,23 @@ export function randomLook(seed = 1, { sex = 'any', age = 'adult' } = {}) {
   };
   if (sx === 'f' && ag !== 'kid' && r() < 0.4) look.lips = r.pick(['#e86a7a', '#c0303a', '#b8506a']);
   return look;
+}
+
+/**
+ * The same person in underwear (romance scenes, agreed with Luca: undressing stops at the underwear;
+ * never nudity). Bra + briefs for women, briefs for men; barefoot, no hat/backpack/bag (glasses,
+ * necklace and scarf stay).
+ */
+export function underwearLook(raw = {}, { color } = {}) {
+  const L = normalizeLook(raw);
+  const fem = L.sex === 'f';
+  const c0 = color || (fem ? '#f7f2f5' : '#3a4a6a');
+  const accent = fem ? '#f4a7b9' : '#ffffff';
+  return {
+    ...L, hat: null,
+    accessory: ['glasses', 'necklace', 'sunglasses'].includes(L.accessory) ? L.accessory : null,
+    top: { style: 'underwear', color: c0, accent, pattern: null },
+    bottom: { style: 'briefs', color: c0 },
+    shoes: { style: 'barefoot', color: L.skin },
+  };
 }

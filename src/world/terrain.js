@@ -76,8 +76,24 @@ ${GLSL_NOISE}`)
     rc = mix(rc, vec3(0.95, 0.97, 1.0), uSnow * smoothstep(0.6, 0.9, vNy));
     col = rc;
   }
+  // fine mottling (grain of the soil, grass clumps, worn stones): breaks the flat colour fields
+  float fd = vnoise(wp * 5.3 + 2.7) * 0.55 + vnoise(wp * 14.0) * 0.45;
+  col *= 0.9 + 0.2 * fd + 0.06 * gm * (vnoise(wp * vec2(26.0, 9.0)) - 0.5);
   diffuseColor.rgb *= col;
-`);
+`)
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+  {
+    // micro relief (bump from world-space noise): grass clumps, path ruts, sand ripples, cobble bevels
+    float zm = step(0.5, zv), rm = step(0.5, rv), sm = (1.0 - gm) * (1.0 - pm) * (1.0 - zm) * (1.0 - rm);
+    float e = 0.07;
+    vec2 q0 = wp;
+    #define VH(P) (vnoise((P) * 2.6) * 0.5 + vnoise((P) * 7.5 + 3.1) * 0.5 + sm * 0.35 * sin((P).x * 2.4 + (P).y * 0.9 + vnoise((P) * 0.6) * 4.0))
+    float h0 = VH(q0), hx = VH(q0 + vec2(e, 0.0)), hz = VH(q0 + vec2(0.0, e));
+    #undef VH
+    float k = 0.05 * (gm * 1.0 + pm * 0.8 + sm * 0.9 + zm * 0.35) * (1.0 - rm);
+    vec3 dw = vec3((hx - h0) / e, 0.0, (hz - h0) / e) * k;
+    normal = normalize(normal - mat3(viewMatrix) * dw * 3.0);
+  }`);
   };
   mat.customProgramCacheKey = () => baseKey + '|valmora-terrain';
   return mat;

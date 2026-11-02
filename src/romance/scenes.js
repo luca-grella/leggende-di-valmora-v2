@@ -18,6 +18,7 @@ import { createCams } from './cams.js';
 import { createHearts, createMotes, createSplash, scatter } from './fx.js';
 import { buildTable, buildPicnic, buildBeach, buildCandles, buildScooterFallback } from './props.js';
 import { createClock, createSafe, pick, sample, fill } from './util.js';
+import { underwearLook } from '../actors/looks.js';
 
 const TAU = Math.PI * 2;
 const WARM = { warmth: 0.22, saturation: 1.14, vignette: 0.4 };
@@ -26,8 +27,9 @@ const NEUTRAL = { warmth: 0.06, saturation: 1.08, vignette: 0.22 };
 const GAP = { face: 1.0, kiss: 0.56, hug: 0.5, whisper: 0.55, ear_nibble: 0.55, kiss_neck: 0.55, stroke_hair: 0.6, guide: 0.6 };
 /** Pair kinds acted on a seat (sofa, cushion); the others stand/kneel on the floor. */
 const SEATED = new Set(['sit_bench', 'massage_feet', 'kiss_feet']);
+const FEET_ACTS = new Set(['feet', 'kiss_feet', 'lick_feet', 'legs']);
 const SIDE_BY_SIDE = new Set(['walk_together', 'scooter_ride', 'sit_bench', 'sit_ground', 'picnic_lap', 'lie_blanket', 'swim']);
-const opt = id => ({ label: ALLOWED_CHOICES[id].label, icon: ALLOWED_CHOICES[id].icon });
+const opt = id => ({ label: ALLOWED_CHOICES[id].label, icon: ALLOWED_CHOICES[id].icon, ...(ALLOWED_CHOICES[id].sub ? { sub: ALLOWED_CHOICES[id].sub } : {}) });
 
 /**
  * @param {any} ctx
@@ -272,15 +274,48 @@ export function createScenes(ctx, hooks = {}) {
     return (Array.isArray(set) ? set : [set]).map(s => fill(s, vars(girl)));
   }
 
+  /** Both down to their underwear (never further): an outfit swap, restored on close. */
+  function wearUnderwear(sc) {
+    if (sc.undressed) return;
+    const pairs = [[sc.b, underwearLook(sc.girl.look || sc.b.look, { color: sc.girl.underwear || sc.girl.color || null })], [sc.a, underwearLook(sc.a.look || playerLook() || { sex: 'm' })]];
+    sc.clothes = [];
+    for (const [h, look] of pairs) {
+      if (!h?.setLook) continue;
+      const before = h.look;
+      try { h.setLook(look); sc.clothes.push([h, before]); } catch (e) { console.warn('[romance] underwear', e); }
+    }
+    sc.undressed = true;
+    sc.restore.push(() => redress(sc));
+  }
+  function redress(sc) {
+    if (!sc.undressed) return;
+    for (const [h, before] of sc.clothes || []) { try { h.setLook(before); } catch { /* optional */ } }
+    sc.clothes = []; sc.undressed = false;
+  }
+  async function undress(sc) {
+    if (sc.undressed) return;
+    await cams.two(sc.a, sc.b, { tight: true, dur: 0.8 });
+    S.expr(sc.b, 'shy');
+    await S.through(async () => { wearUnderwear(sc); await clock.wait(0.15); await cams.two(sc.a, sc.b, { tight: false, dur: 0 }); }, { ms: 700 });
+    S.expr(sc.b, 'blush'); S.expr(sc.a, 'smile');
+    S.lookAt(sc.b, sc.a.head || sc.a.object); S.lookAt(sc.a, sc.b.head || sc.b.object);
+    S.sfx('heart'); heartsAt(sc.b, 2);
+    hooks.counted?.(sc.girl.id, 'undress');
+    await react(sc, 'blush', [choiceText(sc.girl, 'undress')]);
+  }
+
   /** Act one ALLOWED_CHOICES id: pair pose, close-up, hearts, sound and her personal line. */
   async function act(sc, id, anchor) {
     validateChoices([id]);
     const c = ALLOWED_CHOICES[id], fx = CHOICE_FX[id] || {};
+    if (id === 'undress') { await undress(sc); return; }
     if (!c.pair) return;
     const posed = await pose(sc, c.pair, anchor);
     if (!posed) { S.lookAt(sc.a, sc.b.head || sc.b.object); S.lookAt(sc.b, sc.a.head || sc.a.object, { weight: 0.6 }); }
-    // feet actions: medium two-shot of both faces (never a foot close-up); everything else tighter
-    await cams.two(sc.a, sc.b, { tight: !!fx.tight, dur: 1.0 });
+    // feet actions: full side two-shot, both of them head to toe, so the massage / kiss / lick on her feet is
+    // clearly visible together with both faces (never a foot close-up); everything else tighter
+    if (FEET_ACTS.has(id)) await cams.full(sc.a, sc.b, { dur: 1.0 });
+    else await cams.two(sc.a, sc.b, { tight: !!fx.tight, dur: 1.0 });
     if (id === 'whisper') await narrate(NARRATION.whisper);
     await clock.wait(0.35);
     S.sfx(fx.sfx || 'heart'); S.haptic(fx.hearts > 2 ? [12, 40, 12] : 10);
@@ -353,12 +388,14 @@ export function createScenes(ctx, hooks = {}) {
       await S.fadeOut(900, '#1a0f24');
       await clock.wait(0.5);
       await narrate([pick(NARRATION.later)]);
+      wearUnderwear(sc);
       await placeInBed(sc, bed);
       await S.fadeIn(1200);
       if (gl.length > 1) await sayHer(sc, gl.slice(1), { expression: 'blush' });
     } else {
       if (how === 'stop') await react(sc, 'smile', [one(g, 'stop')]);
       await S.fadeOut(800, '#1a0f24');
+      wearUnderwear(sc);
       await placeInBed(sc, bed);
       await S.fadeIn(1100);
     }
@@ -565,9 +602,10 @@ export function createScenes(ctx, hooks = {}) {
       await sayHer(sc, [pick(lines(girl, 'rounds'))], { expression: 'smile' });
 
       // up to 3 rounds; "Lasciati guidare da lei…" or "Basta così" end them early
-      const all = Object.keys(ALLOWED_CHOICES).filter(k => k !== 'continue' && k !== 'stop' && k !== 'guide');
+      const allBase = Object.keys(ALLOWED_CHOICES).filter(k => k !== 'continue' && k !== 'stop' && k !== 'guide');
       let how = null;
       for (let r = 0; r < 3 && !how; r++) {
+        const all = allBase.filter(k => k !== 'undress' || !sc.undressed);
         const title = r === 0 ? `${girl.name} ${heartsText(girl.id)}` : fill(pick(lines(girl, 'rounds')), vars(girl)) || '...';
         const ch = await menu(sc, title, all, { guide: true, stop: true });
         if (ch === 'stop' || ch === 'guide') how = ch;
@@ -586,6 +624,7 @@ export function createScenes(ctx, hooks = {}) {
       const wakeP = bed ? { x: bed.x - Math.sin(bed.facing ?? 0) * 1.6, z: bed.z - Math.cos(bed.facing ?? 0) * 1.6 } : floorA;
       await S.through(async () => {
         try { await ctx.actors?.endPair?.({ a: sc.a, b: sc.b, fade: 0 }); } catch { /* optional */ }
+        redress(sc);                                   // dressed again in the morning
         await pose(sc, 'hug', anchorOf(wakeP, (bed?.facing ?? 0) + Math.PI / 2));
         await cams.two(sc.a, sc.b, { tight: true, dur: 0 });
       }, { ms: 400 });

@@ -45,7 +45,7 @@ export function outlineMaterial(color = '#2a2140') {
   if (OUTLINE_MAT) return OUTLINE_MAT;
   const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(color), side: THREE.BackSide, fog: true });
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uOutline = { value: 0.0042 };
+    sh.uniforms.uOutline = { value: 0.0032 };
     sh.vertexShader = 'uniform float uOutline;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       #ifdef USE_SKINNING
       { float dz = -mvPosition.z;
@@ -122,7 +122,8 @@ function buildBody(RB, L, spec) {
   const acc = col(T.accent || (topC.getHSL({}).l > 0.6 ? '#3a4a6a' : '#ffffff'));
   const botC = col(L.bottom.color), bs = L.bottom.style;
   const accC = col(L.accessoryColor || '#f5b83d');
-  const maleSwim = st === 'swimsuit' && P.sex === 'm';
+  const maleSwim = (st === 'swimsuit' || st === 'underwear') && P.sex === 'm';
+  const bra = st === 'underwear' && P.sex !== 'm';
   const coversHips = st === 'dress' || st === 'coat' || (st === 'swimsuit' && !maleSwim);
   const waistY = 0.905;
   const pattern = (c, Y, a) => {
@@ -171,6 +172,12 @@ function buildBody(RB, L, spec) {
   const torsoColor = (p) => {
     const Y = p.y / s, ax = Math.abs(p.x) / s, front = p.z > 0, a = Math.atan2(p.x, p.z), aa = Math.abs(a);
     const sc = strapColor(p); if (sc && Y < 1.34) return sc;
+    // ---- underwear briefs: low-rise, a band of skin up to the waist
+    if (bs === 'briefs' && Y < waistY) {
+      if (Y < 0.868) return botC;
+      if (Y < 0.885) return mix(botC, acc, 0.55);
+      return skin();
+    }
     // ---- bottoms
     if (Y < waistY && !coversHips) {
       if (bs === 'pyjama') return (Math.floor(a * 4) % 2) ? botC : mix(botC, '#ffffff', 0.35);
@@ -179,6 +186,12 @@ function buildBody(RB, L, spec) {
       return botC;
     }
     if (maleSwim) return skin();
+    // ---- bra: cups/band from 1.105 to 1.265, thin straps over the shoulders
+    if (bra) {
+      if (Y > 1.265) return (Y < 1.345 && ax > 0.07 && ax < 0.092) ? topC : skin();
+      if (Y > 1.105) return (Y < 1.122 || (front && aa < 0.03 && Y > 1.16)) ? mix(topC, acc, 0.6) : topC;
+      return skin();
+    }
     // ---- neckline / shoulders
     if (Y > necklineY(a, front)) {
       if (sleeveless) return skin();
@@ -297,6 +310,7 @@ function buildBody(RB, L, spec) {
         if (legPants) { if (d > Ls / s - 0.06) return mix(botC, '#000', 0.2); return bs === 'pyjama' ? ((Math.floor(d / 0.06) % 2) ? botC : mix(botC, '#fff', 0.35)) : botC; }
         if (shortsLen) { if (d < shortsLen - 0.02) return bs === 'swim_shorts' ? ((Math.floor(Math.atan2(p.x - hip[0], p.z) * 2) % 2) ? botC : mix(botC, '#fff', 0.5)) : botC; if (d < shortsLen + 0.006) return mix(botC, '#000', 0.2); }
         if (coversHips && st === 'swimsuit' && d < 0.035) return topC;
+        if (bs === 'briefs' && d < 0.03) return botC;
         return skin();
       },
       weights: (p) => {
@@ -309,7 +323,7 @@ function buildBody(RB, L, spec) {
   }
 
   // ------------------------------------------------------------------ arms + hands
-  const sleeve = { tshirt: 0.11, shirt: 0.13, blouse: 0.21, hoodie: 0.55, jacket: 0.55, coat: 0.55, uniform: 0.55, dress: 0.0, tank: 0, camisole: 0, swimsuit: 0 }[st] ?? 0.1;
+  const sleeve = { tshirt: 0.11, shirt: 0.13, blouse: 0.21, hoodie: 0.55, jacket: 0.55, coat: 0.55, uniform: 0.55, dress: 0.0, tank: 0, camisole: 0, swimsuit: 0, underwear: 0 }[st] ?? 0.1;
   const sleeveLen = maleSwim ? 0 : sleeve * s;
   const longSleeve = sleeve > 0.4;
   for (const [side, k] of [['L', 1], ['R', -1]]) {

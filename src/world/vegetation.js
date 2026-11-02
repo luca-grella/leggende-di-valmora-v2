@@ -172,8 +172,11 @@ export function buildVegetation(ctx, island, heightAt) {
       if (r < pTree + 0.12) { rock(jx, jz, h); continue; }
       // flower meadows and tufts
       const fl = N2.noise2(jx * 0.03, jz * 0.03);
-      if (fl > 0.2 && R() < dens) { for (let k = 0; k < 4; k++) flower(jx + (R() - 0.5) * 3, jz + (R() - 0.5) * 3); continue; }
-      if (R() < 0.55 * dens) addSmall(C.snow ? 'tuft' : id === 'nebbia' && R() < 0.5 ? 'heather' : 'tuft', jx, jz, h, 0.8 + R() * 0.5);
+      // lush ground (Sun/Moon meadows): clusters of tufts everywhere, flower patches where the noise says so
+      const small = C.snow ? 'tuft' : id === 'nebbia' && R() < 0.5 ? 'heather' : 'tuft';
+      if (fl > 0.08 && R() < dens) { for (let k = 0; k < 6; k++) flower(jx + (R() - 0.5) * 3.4, jz + (R() - 0.5) * 3.4); }
+      const nT = Math.round((2 + R() * 3) * dens);
+      for (let k = 0; k < nT; k++) { const tx = jx + (R() - 0.5) * STEP, tz = jz + (R() - 0.5) * STEP; if (occ.at(tx, tz) === OCC.FREE) addSmall(small, tx, tz, heightAt(tx, tz), 0.7 + R() * 0.6); }
     } else if (o === OCC.ROAD || o === OCC.BUSY) {
       if (R() < 0.12 * dens && occ.at(jx, jz) === OCC.ROAD && !occ.clearOf(jx, jz, 0, OCC.ROAD)) { /* keep roads clean */ }
     } else if (o === OCC.BEACH) {
@@ -212,10 +215,10 @@ export function buildVegetation(ctx, island, heightAt) {
   function flower(x, z) {
     const h = heightAt(x, z); if (h < 0.5) return;
     const ci = Math.floor(R() * flowerCols.length);
-    setFor('flower', ci, { sway: 0.06, base: 0.05, petal: flowerCols[ci], noShadow: true, radius: 46, cap: 2500, tag: 'f' + ci }).add({ x, y: h - 0.02, z, ry: R() * 6, s: 0.9 + R() * 0.5 });
+    setFor('flower', ci, { sway: 0.06, base: 0.05, petal: flowerCols[ci], noShadow: true, radius: 42, cap: 3500, tag: 'f' + ci }).add({ x, y: h - 0.02, z, ry: R() * 6, s: 0.9 + R() * 0.5 });
   }
   function addSmall(kind, x, z, h, s) {
-    setFor(kind, 0, { sway: kind === 'tuft' ? 0.35 : 0.05, base: 0.0, noShadow: true, radius: 44, cap: 3000 }).add({ x, y: h - 0.04, z, ry: R() * 6, s, color: tint(null, 0.15) });
+    setFor(kind, 0, { sway: kind === 'tuft' ? 0.35 : 0.05, base: 0.0, noShadow: true, radius: 40, cap: 6000 }).add({ x, y: h - 0.04, z, ry: R() * 6, s, color: tint(null, 0.15) });
   }
 
   st.finish();

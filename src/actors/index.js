@@ -1,7 +1,7 @@
 // Actors area entry point (contract: docs/ARCHITECTURE.md "Actors API"). Procedural Sun/Moon humans,
 // the player controller (ctx.player), NPCs (spawn, wander, schedules, talk, ambient villagers) and the
 // two-person staging used by dialogue and romance scenes. Every Human auto-updates on the actors loop.
-import { LOOKS, randomLook, normalizeLook } from './looks.js';
+import { LOOKS, randomLook, normalizeLook, underwearLook } from './looks.js';
 import { CLIP_NAMES, CLIPS } from './clips.js';
 import { EXPRESSIONS } from './face.js';
 import { PAIR_KINDS, stagePair, endPair } from './pairs.js';
@@ -13,7 +13,7 @@ import { createPlayer } from './player.js';
 export function init(ctx) {
   clipLibrary();                                   // bake once up front (≈ a few ms)
   const actors = {
-    looks: LOOKS, randomLook, normalizeLook, clips: CLIP_NAMES, allClips: Object.keys(CLIPS), EXPRESSIONS, PAIR_KINDS,
+    looks: LOOKS, randomLook, normalizeLook, underwearLook, clips: CLIP_NAMES, allClips: Object.keys(CLIPS), EXPRESSIONS, PAIR_KINDS,
     /** Create a free Human (not added to the scene: `ctx.scene.add(h.object)`). */
     createHuman: (look, opts = {}) => new Human(ctx, look, opts),
     stagePair: (kind, opts) => stagePair(ctx, kind, opts),

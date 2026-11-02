@@ -24,6 +24,10 @@ export const HUMANS = new Set();
 const _p = new THREE.Vector3(), _p2 = new THREE.Vector3(), _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion();
 const _n = new THREE.Vector3(), _ax = new THREE.Vector3(), _cam = new THREE.Vector3(), _f = new THREE.Vector3();
 const _qi = new THREE.Quaternion(), _qe = new THREE.Quaternion();
+/** Floor poses: body points (bone, clearance in body heights) whose lowest one must touch the floor. */
+const KNEES = [['shin_L', 0.035], ['shin_R', 0.035], ['foot_L', 0.03], ['foot_R', 0.03]];
+const SEAT = [['hips', 0.07], ['thigh_L', 0.06], ['thigh_R', 0.06], ['foot_L', 0.03], ['foot_R', 0.03]];
+const GROUND_CONTACT = { kneel: KNEES, kneel_bow: KNEES, sit_ground: SEAT, sit_knees: SEAT, sit_legs: SEAT };
 const UP = new THREE.Vector3(0, 1, 0);
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const wrap = a => { a = (a + Math.PI) % (Math.PI * 2); if (a < 0) a += Math.PI * 2; return a - Math.PI; };
@@ -54,7 +58,7 @@ export class Human {
     this._turn = null;                                   // face() tween
     this._speed = 0; this._turnRate = 0; this._accel = 0; this._drive = null;
     this._roll = 0; this._pitch = 0; this._breath = Math.random() * 6; this._exert = 0; this._t = Math.random() * 10;
-    this._hipDrop = 0; this._accum = 0;
+    this._hipDrop = 0; this._accum = 0; this._lift = 0;
     this._talkGesture = false; this._carry = false;
     this.onStep = null;                                  // (data) → void  footstep hook
     this.onEvent = null;                                 // (evt, clip, data) → void
@@ -428,6 +432,20 @@ export class Human {
     // ---- feet on uneven ground ----
     const fw = this.footIK ? M.footIK : 0;
     if (fw > 0.01) this._footIK(dt, fw); else this._hipDrop *= Math.exp(-8 * dt);
+
+    // ---- floor contact for kneeling / sitting / lying on the floor: the lowest body point rests on the
+    //      floor (knees never sink into it, hips never float above it) ----
+    const gc = GROUND_CONTACT[this.clip];
+    const gw = gc ? Math.min(1, Math.max(0, (M.sit - 0.3) / 0.6)) : 0;
+    let lift = 0;
+    if (gw > 0.001) {
+      const fy = this.object.position.y, h = this.look.height;
+      let need = -Infinity;
+      for (const [b, r] of gc) { const bb = B[b]; if (!bb) continue; need = Math.max(need, fy + r * h - bb.getWorldPosition(_p).y); }
+      if (Number.isFinite(need)) lift = Math.max(-0.25, Math.min(0.35, need)) * gw;
+    }
+    this._lift += (lift - this._lift) * (1 - Math.exp(-14 * dt));
+    if (Math.abs(this._lift) > 1e-4) { B.root.position.y += this._lift / this.look.height; B.root.updateMatrixWorld(true); }
 
     // ---- look-at ----
     this.lookAtCtl.update(dt, this._lookTarget, M.look * this._lookWeight);

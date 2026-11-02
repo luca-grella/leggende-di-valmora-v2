@@ -33,22 +33,66 @@ class SceneMSAAPass extends Pass {
   dispose() { this.rt?.dispose(); this.copy.dispose(); this.fsQuad.dispose(); }
 }
 
+// Tilt-shift (diorama depth of field, like Lenza Lenta v2): a sharp band around the followed subject,
+// soft blur towards the top (far) and bottom (near) of the screen. Separable: H pass + V inside the final.
+const TILT_COMMON = /* glsl */`
+uniform sampler2D tDiffuse;
+uniform vec2 texel, dir;
+uniform float focusY, band, falloff, radius;
+varying vec2 vUv;
+float tiltAmount(){
+  float d = vUv.y - focusY;
+  float far = d > 0.0 ? 1.0 : 0.75;
+  return smoothstep(band, band + falloff, abs(d)) * far;
+}
+vec3 tiltBlur(){
+  float r = tiltAmount() * radius;
+  vec3 c0 = texture2D(tDiffuse, vUv).rgb;
+  if (r < 0.35) return c0;
+  vec3 acc = c0; float wsum = 1.0;
+  for (int i = 1; i <= HALF; i++) {
+    float x = float(i) / float(HALF);
+    float w = exp(-x * x * 2.2);
+    vec2 o = dir * texel * x * r;
+    acc += (texture2D(tDiffuse, vUv + o).rgb + texture2D(tDiffuse, vUv - o).rgb) * w;
+    wsum += 2.0 * w;
+  }
+  return acc / wsum;
+}`;
+const TILT_UNIFORMS = () => ({ texel: { value: new THREE.Vector2(1 / 1024, 1 / 1024) }, dir: { value: new THREE.Vector2(1, 0) }, focusY: { value: 0.45 }, band: { value: 0.12 }, falloff: { value: 0.4 }, radius: { value: 0 } });
+const VERT = /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+
+class TiltPass extends Pass {
+  constructor() {
+    super();
+    this.uniforms = { tDiffuse: { value: null }, ...TILT_UNIFORMS() };
+    this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, defines: { HALF: 4 }, vertexShader: VERT, fragmentShader: TILT_COMMON + 'void main(){ gl_FragColor = vec4(tiltBlur(), 1.0); }', depthTest: false, depthWrite: false });
+    this.fsQuad = new FullScreenQuad(this.material);
+  }
+  render(renderer, writeBuffer, readBuffer) {
+    this.uniforms.tDiffuse.value = readBuffer.texture;
+    renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
+    this.fsQuad.render(renderer);
+  }
+  dispose() { this.material.dispose(); this.fsQuad.dispose(); }
+}
+
 const FinalShader = {
   uniforms: {
     tDiffuse: { value: null }, exposure: { value: 1 }, warmth: { value: 0.06 }, saturation: { value: 1.08 }, contrast: { value: 0.1 },
     vignette: { value: 0.22 }, lift: { value: 0.015 }, aspect: { value: 1.6 }, time: { value: 0 }, tint: { value: new THREE.Vector3(1, 1, 1) },
+    ...TILT_UNIFORMS(),
   },
   vertexShader: /* glsl */`varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: /* glsl */`
-uniform sampler2D tDiffuse;
+  fragmentShader: TILT_COMMON + /* glsl */`
 uniform float exposure, warmth, saturation, contrast, vignette, lift, aspect, time;
 uniform vec3 tint;
-varying vec2 vUv;
 vec3 toSRGB(vec3 c){ return mix(c * 12.92, pow(c, vec3(0.41666)) * 1.055 - 0.055, step(0.0031308, c)); }
 float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main(){
-  vec3 c = texture2D(tDiffuse, vUv).rgb * exposure * tint;
-  // soft shoulder only above 1.0 (bloomed emissives), toon colours below stay untouched
+  vec3 c = tiltBlur() * exposure * tint;
+  // filmic shoulder: highlights roll off softly (sunlit sand, white walls) instead of clipping flat
+  c = mix(c, c / (1.0 + max(c - 0.75, 0.0) * 0.9), step(0.75, c));
   c = min(c, vec3(1.0) + (c - 1.0) * 0.25);
   c = toSRGB(clamp(c, 0.0, 1.0));
   // white balance (display space): warm = more red/yellow, less blue
@@ -75,7 +119,8 @@ class FinalPass extends Pass {
   constructor() {
     super();
     this.uniforms = THREE.UniformsUtils.clone(FinalShader.uniforms);
-    this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, vertexShader: FinalShader.vertexShader, fragmentShader: FinalShader.fragmentShader, depthTest: false, depthWrite: false });
+    this.material = new THREE.ShaderMaterial({ uniforms: this.uniforms, defines: { HALF: 4 }, vertexShader: FinalShader.vertexShader, fragmentShader: FinalShader.fragmentShader, depthTest: false, depthWrite: false });
+    this.uniforms.dir.value.set(0, 1);
     this.fsQuad = new FullScreenQuad(this.material);
   }
   render(renderer, writeBuffer, readBuffer) {
@@ -100,17 +145,22 @@ export function createPost({ renderer, scene, camera, ctx }) {
   const scenePass = new SceneMSAAPass(scene, camera, q?.msaa ?? 2);
   // threshold 1.0 on linear HDR: only emissive (glow intensity > 1) and very bright highlights bloom
   const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.45, 0.5, 1.0);
+  const tiltPass = new TiltPass();
   const finalPass = new FinalPass();
-  composer.addPass(scenePass); composer.addPass(bloomPass); composer.addPass(finalPass);
+  composer.addPass(scenePass); composer.addPass(bloomPass); composer.addPass(tiltPass); composer.addPass(finalPass);
 
   // base parameters; the time of day adds an offset on top when `auto`
-  const params = { warmth: 0.06, saturation: 1.08, vignette: 0.22, contrast: 0.1, exposure: 1, bloom: 0.45, lift: 0.015 };
+  const params = { warmth: 0.07, saturation: 1.12, vignette: 0.26, contrast: 0.16, exposure: 1.04, bloom: 0.45, lift: 0.012, tilt: 1 };
+  const _ndc = new THREE.Vector3();
+  let focusY = 0.45, heightPx = size.y * pr;
   const live = { warmth: params.warmth, sat: params.saturation, exposure: 1, night: 0 };
   let userEnabled = true;
 
   const post = {
     composer, params,
-    passes: { scene: scenePass, bloom: bloomPass, final: finalPass },
+    passes: { scene: scenePass, bloom: bloomPass, tilt: tiltPass, final: finalPass },
+    /** Tilt-shift strength: 0 off, 1 default (subtle diorama), up to ~2.5. Close-ups use less. */
+    tiltShift(v) { params.tilt = clamp(+v || 0, 0, 3); },
     /** Follow the time of day (dusk warmer, night bluer and lifted). */
     auto: true,
     get enabled() { return userEnabled && !!(ctx.quality?.post ?? true); },
@@ -129,6 +179,9 @@ export function createPost({ renderer, scene, camera, ctx }) {
     setSize(w, h, pixelRatio) {
       composer.setPixelRatio(pixelRatio); composer.setSize(w, h);
       finalPass.uniforms.aspect.value = w / Math.max(1, h);
+      const pw = Math.max(1, Math.round(w * pixelRatio)), ph = Math.max(1, Math.round(h * pixelRatio));
+      for (const p of [tiltPass, finalPass]) p.uniforms.texel.value.set(1 / pw, 1 / ph);
+      heightPx = ph;
     },
     applyQuality() {
       scenePass.setSamples(ctx.quality?.msaa ?? 2);
@@ -157,6 +210,22 @@ export function createPost({ renderer, scene, camera, ctx }) {
     u.tint.value.set(1 - 0.06 * live.night, 1 - 0.02 * live.night, 1 + 0.06 * live.night);
     u.time.value = (u.time.value + dt) % 1000;
     bloomPass.strength = params.bloom * (1 + 0.5 * live.night);
+    // tilt-shift band follows the subject: the player while exploring, the look target in close-ups
+    // (close-ups get a shallower effect: faces and hands must stay sharp)
+    const rig = ctx.cameraRig, explore = !rig || rig.mode === 'explore' || rig.mode === 'release';
+    const fp = explore ? (rig?.followPos || null) : rig?.lookTarget;
+    let fy = 0.45;
+    if (fp) { _ndc.copy(fp).project(camera); if (_ndc.z < 1) fy = clamp(_ndc.y * 0.5 + 0.5, 0.15, 0.85); }
+    focusY = damp(focusY, fy, 4, dt);
+    const portrait = camera.aspect < 1;
+    const strength = params.tilt * (explore ? 1 : 0.55);
+    const radius = strength * 0.0034 * heightPx * (portrait ? 0.75 : 1);
+    for (const p of [tiltPass, finalPass]) {
+      const t = p.uniforms;
+      t.focusY.value = focusY; t.radius.value = radius;
+      t.band.value = explore ? (portrait ? 0.12 : 0.16) : 0.22; t.falloff.value = portrait ? 0.36 : 0.44;
+    }
+    tiltPass.enabled = radius > 0.3;
   }
 
   post.applyQuality();

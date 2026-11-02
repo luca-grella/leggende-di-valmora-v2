@@ -120,9 +120,10 @@ export async function createCore(opts = {}) {
   }, ORDER.time);
   ctx.loop.add(function coreInteract() { ctx.interact.update(); }, ORDER.systems - 1);
   ctx.loop.add(function coreCamera(dt) { ctx.cameraRig.update(dt); }, ORDER.camera);
-  ctx.loop.add(function coreShadow() {
+  ctx.loop.add(function coreShadow(dt) {
     const f = ctx.cameraRig.mode === 'explore' ? ctx.cameraRig.followPos : ctx.cameraRig.lookTarget;
     ctx.toon.updateShadow(f);
+    ctx.toon.frame?.(camera, dt);
   }, ORDER.camera + 1);
 
   window.addEventListener('resize', resize);

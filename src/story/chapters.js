@@ -730,7 +730,7 @@ export function wireChapters(ctx) {
   // Lab: entering at prologue step 1 starts the starter scene by itself
   ctx.bus.on('interior:enter', ({ id } = {}) => {
     if (id !== 'lab.alba' || !is('prologo', 1)) return;
-    K.wait(0.5).then(() => K.until(() => !ctx.busy.is(), 6)).then(() => K.wait(0.3))
+    K.wait(0.5).then(() => K.until(() => !ctx.busy.is(), 30)).then(() => K.wait(0.3))
       .then(() => { if (is('prologo', 1) && !ctx.busy.is() && ctx.world?.interior === 'lab.alba') starterScene(R.get('story.quercia_lab')); });
   });
   // first wild battle on Percorso 1
