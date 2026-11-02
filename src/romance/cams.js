@@ -151,6 +151,20 @@ export function createCams(ctx) {
         if (!best || score < best.score) best = { position, target, score };
         if (score === 0) break;
       }
+      // steep (bed) shots: the points nearer the lens project larger than the flat fit assumes, which pushes the
+      // faces up against the letterbox — tilt so the projected subject is centred in the visible band
+      if (pitch > 0.5) {
+        const P0 = best.position, f = new THREE.Vector3(), r = new THREE.Vector3(), u = new THREE.Vector3(), d = new THREE.Vector3();
+        const want = padBottom - padTop;
+        for (let it = 0; it < 3; it++) {
+          f.subVectors(best.target, P0); const dist = f.length(); f.divideScalar(dist);
+          r.crossVectors(f, up0).normalize(); u.crossVectors(r, f);
+          let lo = Infinity, hi = -Infinity;
+          for (const p of pts0) { d.subVectors(p, P0); const z = d.dot(f); if (z < 0.05) continue; const y = d.dot(u) / z / tanV; lo = Math.min(lo, y); hi = Math.max(hi, y); }
+          if (!(hi > lo)) break;
+          best.target.addScaledVector(u, ((lo + hi) / 2 - want) * tanV * dist);
+        }
+      }
       const offs = new THREE.Vector3().copy(best.target).sub(c);
       const _lt2 = new THREE.Vector3();
       const liveFn = live ? () => center(getPts(), _lt2).add(offs) : null;

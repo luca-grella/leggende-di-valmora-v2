@@ -91,10 +91,12 @@ export class BattleRun {
     }
     const pos = portrait
       ? ally.clone().addScaledVector(fw, -4.0 - big * 1.2).addScaledVector(rt, 1.55).setY(ally.y + 2.0 + big * 1.0)
-      : ally.clone().addScaledVector(fw, -2.3 - big * 0.7).addScaledVector(rt, 1.7 + big * 0.3).setY(ally.y + 1.15 + big * 0.6);
-    const tgt = ally.clone().lerp(foe, portrait ? 0.56 : 0.5); tgt.y += big * (portrait ? 0.3 : 0.4);
-    if (!portrait) tgt.addScaledVector(rt, -0.25);
-    const spec = { position: pos, target: tgt, fov: portrait ? 42 : 40 };
+      // landscape: further back and less to the side, so the player (behind the ally, on the left) stays whole
+      // on screen next to the ally, the foe and the trainer
+      : ally.clone().addScaledVector(fw, -3.0 - big * 0.7).addScaledVector(rt, 1.0 + big * 0.3).setY(ally.y + 1.15 + big * 0.6);
+    const tgt = ally.clone().lerp(foe, portrait ? 0.56 : 0.5); tgt.y += big * (portrait ? 0.3 : 0.28);
+    if (!portrait) tgt.addScaledVector(rt, -0.6);
+    const spec = { position: pos, target: tgt, fov: 42 };
     if (kind === 'battle_intro') {
       const fpos = foe.clone().addScaledVector(fw, -(1.6 + hf * 1.2)).addScaledVector(rt, 0.4); fpos.y += hf * 0.6 + 0.2;
       const ftgt = foe.clone(); ftgt.y += hf * 0.55;

@@ -25,6 +25,11 @@ const OCC_VERT = /* glsl */`
     ow = instanceMatrix * ow;
   #endif
   vOccW = (modelMatrix * ow).xyz;
+  #ifdef USE_INSTANCING
+    vOccI = (modelMatrix * vec4(instanceMatrix[3].xyz, 1.0)).xyz;
+  #else
+    vOccI = vec3(0.0, -9999.0, 0.0);
+  #endif
 }`;
 const OCC_FRAG = /* glsl */`
 #include <clipping_planes_fragment>
@@ -35,6 +40,17 @@ if (uOccR > 0.0) {
   float d = length(vOccW - (uOccA + ab * t));
   float before = (1.0 - t) * sqrt(L2);            // metres before the player along the view line
   float k = (1.0 - smoothstep(uOccR * 0.55, uOccR, d)) * smoothstep(0.6, 2.2, before);
+  #ifdef OCC_WHOLE
+  // trees fade as a whole (trunk included) when their axis stands close to the view line in plan view, so a
+  // vanished canopy never leaves a bare solid trunk in front of the player
+  if (vOccI.y > -9000.0) {                        // (non-instanced meshes: sentinel from the vertex shader)
+    vec2 ab2 = ab.xz;
+    float t2 = clamp(dot(vOccI.xz - uOccA.xz, ab2) / max(dot(ab2, ab2), 1e-4), 0.0, 1.0);
+    float d2 = length(vOccI.xz - (uOccA.xz + ab2 * t2));
+    float kw = (1.0 - smoothstep(uOccR * 0.75, uOccR + 0.6, d2)) * smoothstep(0.6, 2.2, (1.0 - t2) * sqrt(L2));
+    k = max(k, kw);
+  }
+  #endif
   // 4x4 ordered dither: soft-looking see-through without transparency sorting
   vec2 q = mod(floor(gl_FragCoord.xy), 4.0);
   float th = (mod(q.x + q.y * 2.0, 4.0) * 4.0 + mod(q.y + q.x * 3.0, 4.0) + 0.5) / 16.0;
@@ -75,17 +91,19 @@ export function createWorldMats(ctx) {
   // always-glowing (crystals in caves, campfire, lava)
   const glowAlways = extendToon(T.matUnique('#ffffff', { vertexColors: true, emissive: '#ffffff', emissiveIntensity: 0.9 }), 'glowvc2', emissiveFromColor);
 
-  /** Wind-swayed vertex-colour material (trees, bushes, flowers). sway: bend strength, base: height where bending starts. */
+  /** Wind-swayed vertex-colour material (trees, bushes, flowers). sway: bend strength, base: height where bending starts;
+   *  o.whole: instanced trees that see-through fade as a whole (trunk too). */
   const windCache = new Map();
   function wind(sway = 0.012, base = 0.4, o = {}) {
-    const key = `${sway}|${base}|${o.side || 0}`;
+    const key = `${sway}|${base}|${o.side || 0}|${o.whole ? 1 : 0}`;
     if (windCache.has(key)) return windCache.get(key);
     const m = T.matUnique('#ffffff', { vertexColors: true, side: o.side ?? THREE.FrontSide, surf: 'attr' });
     const U = { uSway: { value: sway }, uSwayBase: { value: base } };
     extendToon(m, 'wind', sh => {
       Object.assign(sh.uniforms, WIND, U, OCCLUDE);
-      sh.vertexShader = 'uniform float uTime, uWind, uSway, uSwayBase;\nvarying vec3 vOccW;\n' + sh.vertexShader.replace('#include <begin_vertex>', WIND_VERT).replace('#include <project_vertex>', OCC_VERT);
-      sh.fragmentShader = 'uniform vec3 uOccA, uOccB;\nuniform float uOccR;\nvarying vec3 vOccW;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', OCC_FRAG);
+      const def = o.whole ? '#define OCC_WHOLE\n' : '';
+      sh.vertexShader = def + 'uniform float uTime, uWind, uSway, uSwayBase;\nvarying vec3 vOccW, vOccI;\n' + sh.vertexShader.replace('#include <begin_vertex>', WIND_VERT).replace('#include <project_vertex>', OCC_VERT);
+      sh.fragmentShader = def + 'uniform vec3 uOccA, uOccB;\nuniform float uOccR;\nvarying vec3 vOccW, vOccI;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', OCC_FRAG);
     });
     m.customProgramCacheKey = (k => () => k)(m.customProgramCacheKey() + key);
     windCache.set(key, m);

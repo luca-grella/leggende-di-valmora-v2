@@ -259,7 +259,8 @@ export function buildLayout(D) {
   // story specials in towns
   {
     const A = towns.alba, lab = A.buildings.find(b => b.kind === 'lab'), [fx, fz] = dirOf(lab.facing);
-    put('alba.quercia', lab.outside.x + fz * 2.6 + fx * 0.6, lab.outside.z - fx * 2.6 + fz * 0.6, lab.facing);
+    // (1.4 m out from the door line: the lab's planter, 2.2 m to the side of the door, stays clear of her)
+    put('alba.quercia', lab.outside.x + fz * 2.6 + fx * 1.4, lab.outside.z - fx * 2.6 + fz * 1.4, lab.facing);
     POIS['alba.well'] = { ...POIS['alba.landmark'] };
     const h1 = A.buildings.find(b => b.interior === 'house.alba.1');
     put('alba.rosa', h1.outside.x + 1.8, h1.outside.z + 1.2, h1.facing);

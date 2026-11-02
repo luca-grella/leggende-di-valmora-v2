@@ -141,7 +141,8 @@ export function buildVegetation(ctx, island, heightAt) {
     const k = kind + variant + (o.tag || '');
     if (!sets[k]) {
       const sway = o.sway ?? TREE_SHADE[kind] ?? 0.01, base = o.base ?? (kind === 'palm' ? 1.5 : kind === 'jungle' ? 3 : 0.9);
-      const mat = sway > 0 ? mats.wind(sway, base, o.side ? { side: o.side } : {}) : mats.solid;
+      const wo = { ...(o.side ? { side: o.side } : {}), ...(kind in TREE_R ? { whole: true } : {}) };
+      const mat = sway > 0 || kind in TREE_R ? mats.wind(sway, base, wo) : mats.solid;
       sets[k] = st.set(k, template(kind, { ...C, petal: o.petal || '#ffffff' }, variant), mat, { castShadow: !o.noShadow, cap: o.cap, radius: o.radius });
     }
     return sets[k];

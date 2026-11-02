@@ -202,7 +202,7 @@ export function createActing(ctx, { clock, S, cams }) {
     if (Number.isFinite(facing)) await race(h.face(facing, { dur: 0.45 }), 1.5);
   }
   /** Sit on the sofa seat (walks to its front, turns, sits back onto it). */
-  async function sitSofa(h, set, dr, { clip = 'sit_idle', turn = 0, fwd = 0.05 } = {}) {
+  async function sitSofa(h, set, dr, { clip = 'sit_idle', turn = 0, fwd = 0.16 } = {}) {
     const s = set.sofa, p = s.at(fwd, dr);
     if (h.grounded && h.clip !== 'sit_idle' && h.clip !== 'sit_feet') await standUp(h);
     if (h.grounded) {
@@ -896,7 +896,10 @@ export function createActing(ctx, { clock, S, cams }) {
     const pts = P(() => [headP(b), surf(b, 'shoulder_R', { u: 0.9 }), surf(b, 'shoulder_L', { u: 0.9 }), landing.clone(), landing.clone().add(V(0, 0.15, 0))]);
     // from the room side, a little toward the foot of the bed, high: her face and the floor where it falls
     const yawOf = (k) => Math.atan2(B.Lx.x * Math.cos(k) - B.H.x * Math.sin(k), B.Lx.z * Math.cos(k) - B.H.z * Math.sin(k));
-    return cams.fit(pts, { yaws: [yawOf(0.55), yawOf(0.85), yawOf(0.25)], pitch: 0.82, minV: 1.0, margin: 1.15, clamp: bedClamp(set), ...o });
+    // portrait: the band is shifted down (headroom above the faces, the landing spot low in the frame, clear of
+    // the dialogue box while the garment falls) — same frame size, the faces sit in the upper middle
+    const tall = (ctx.viewport?.aspect ?? (innerWidth / innerHeight)) < 1 ? { padTop: 0.28, padBottom: 0.1 } : {};
+    return cams.fit(pts, { yaws: [yawOf(0.55), yawOf(0.85), yawOf(0.25)], pitch: 0.82, minV: 1.0, margin: 1.15, clamp: bedClamp(set), ...tall, ...o });
   }
   /** Camera positions allowed around the bed: high above the mattress and never past the blanket's top edge. */
   function bedClamp(set) {
