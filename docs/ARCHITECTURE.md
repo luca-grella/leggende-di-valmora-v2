@@ -567,16 +567,43 @@ romance.date(id), romance.home(id), romance.outing(id, kind) → Promise
 kiss 'Baciala' · hair 'Accarezzale i capelli' · shoulders 'Massaggiale le spalle' · back 'Massaggiale la schiena' ·
 legs 'Massaggiale le gambe' · feet 'Massaggiale i piedi' · kiss_feet 'Baciale i piedi' · lick_feet 'Leccale i piedi' ·
 kiss_neck 'Baciale il collo' · lick_neck 'Leccale il collo' · ear 'Mordicchiale l'orecchio' · hug 'Stringila a te' ·
-whisper 'Sussurrale qualcosa all'orecchio' · guide 'Lasciati guidare da lei…' · continue 'Continua' · stop 'Basta così'
+whisper 'Sussurrale qualcosa all'orecchio' · undress 'Spogliatevi a vicenda' (restando in intimo) ·
+guide 'Lasciati guidare da lei…' · continue 'Continua' · stop 'Basta così'
 ```
 `validateChoices(list)` throws on anything else; scenes call it before every menu. Each choice maps
 to a pair kind (`kiss→kiss`, `hair→stroke_hair`, `shoulders→massage_shoulders`, `back→massage_back`,
 `legs→massage_legs`, `feet→massage_feet`, `kiss_feet|lick_feet→kiss_feet`, `kiss_neck|lick_neck→kiss_neck`,
-`ear→ear_nibble`, `hug→hug`, `whisper→whisper`, `guide→guide`) and camera `romance` (medium two-shot).
-Night end: `lie_blanket` + `romance_top`, fade, morning. Outing extras (non-intimate) are allowed:
+`ear→ear_nibble`, `hug→hug`, `whisper→whisper`, `guide→guide`) and camera `romance` (medium two-shot);
+outings still stage those pair kinds. Outing extras (non-intimate) are allowed:
 wine, dessert, viewpoint, splash, carry her in the water, strawberries, head on her lap, hug from
 behind on the scooter. Never: nudity, intimate parts, sexual acts shown/described, choosing parts
-of the foot, foot close-ups, undressing/underwear. v1 `undress`/`under` data is not ported.
+of the foot, foot close-ups; underwear stays on except the implied under-the-sheet moment (GDD).
+v1 `undress`/`under` data is not ported.
+
+**Acting** (`src/romance/acting.js`, used by the home evening and the date's moment; outings keep
+stagePair): the couple's pose is a state on the real furniture of her home, read from
+`world.layout.interiors[home].furniture` (sofa front = its local +z, seat 0.57 m; bed head = local −z,
+quilt 0.76 m; the room side of the bed is the long side facing the room centre):
+`sofa` (side by side, he on her right: seated kiss / hair / whisper / neck / ear), `stand` (face to face on
+free floor: hug, undress, standing kiss…), `knees` (she on her heels on the floor, he kneeling behind:
+shoulders, back), `legs` (she sits with legs out, he kneels at her right), `feet` (she on the sofa, he
+kneeling in front: foot on his lap / foot lifted to his mouth), `bedside`, `bededge`, `bed`. Changing
+state is always visible: stand up (`human.standUp`), walk (`moveTo`), turn, sit (`sitOn`), kneel
+(`kneelAt`), sit on the floor (`sitGround`); only getting under the blanket happens behind a fade.
+Floor poses search free floor for their footprint (`world.colliders.blocked`). Contacts use
+`human.touch / mouthTo / setFootTarget` with a per-frame spacing solver (mouth / hand reach errors,
+head and chest overlap, his knees kept out of the sofa). While acting, both humans carry a pair record
+(`human._pair.romance = true`: crowd collisions and the player controller keep off; `endPair` on close
+cleans it). Undressing = `human.undress()` animated, down to the underwear. Bed: `lieOn` on the quilt,
+heads on the pillows, then romance's own opaque double-sided blanket (vertex heights lifted above
+~400 body surface samples, drapes to 12 cm above the floor on the sides and the foot end, top edge
+just under the collarbones, `userData.noOcclude`). `slipOff()`: her hand IK target travels under
+the quilt (a moving bulge in the blanket), then a small garment mesh slides out from under the drape
+and lands on the floor beside the bed (disposed on close). Cameras: `cams.fit(points, {yaws, pitch,
+minV, padTop, padBottom, clamp})` frames live body points from the clearest of a few directions,
+keeping them inside the band left by the letterbox and the dialogue box; feet shots use minV ≥
+1.25 m (medium), bed shots `clamp` the lens ≥ 0.95 m above the quilt and on the foot side of the
+faces. Debug: `__valmora.romance.scenes.acting`.
 Romance reacts to `settings:change {key:'adult'}`: hides/shows hearts and registers/unregisters
 its quests. When disabled, the women are plain NPCs with friendly lines.
 

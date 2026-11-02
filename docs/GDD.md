@@ -311,14 +311,26 @@ night (tiers 0/1/2 at 0, 2, 5) and changes her lines.
   Baciale il collo · Leccale il collo · Mordicchiale l'orecchio · Stringila a te ·
   Sussurrale qualcosa all'orecchio · "Lasciati guidare da lei…" (allusive lines per
   personality that name nothing) · Continua / Basta così.
-- Intimacy can be **implied**: lying together under a blanket, only heads and shoulders
-  visible, fade to the morning.
+- **Undressing** (agreed with Luca): "Spogliatevi a vicenda" and the way to bed take both
+  **down to the underwear** with a visible animation (top over the head, bottoms off), never
+  further. Everything is acted with real contact: hands lie on her shoulders/back/legs/feet,
+  lips meet, hugs wrap, bodies sit/kneel/lie on the real sofa, floor and bed, nobody goes
+  through anybody or any furniture, and every change of pose is a visible transition.
+- Intimacy can be **implied**: lying together under an opaque, tucked blanket, only heads and
+  shoulders visible. The single agreed exception to "underwear stays on": once under the
+  blanket she slips her underwear off **under the sheet** — shown only as a shoulder / hand
+  movement (a bulge travelling under the quilt), then the garment slides out from under the
+  blanket and lies on the floor beside the bed. Nothing below the shoulders is ever visible
+  from any angle (bed cameras are clamped above the blanket; her body keeps its underwear
+  geometry under it anyway). Then the night passes, fade to the morning.
+- Feet actions (massage, kiss, lick her feet): a **medium shot** where her face, her foot and
+  his face/hands on it are all clearly visible; never an extreme close-up, and no menu for
+  parts of the foot — the kisses vary by themselves between the top of the foot, the toes and
+  the ankle, in a different order every time.
 - **NEVER:** nudity or anatomy, options about intimate body parts, sexual acts shown or
-  described, choosing parts of the foot, foot close-ups (foot actions are framed as a
-  medium two-shot showing both faces), undressing or removing underwear. Characters stay
-  clothed (at home she wears a dress or a pyjama/camisole; under the blanket only bare
-  shoulders and faces show). v1's `undress` lines, `under` colours and anything similar are
-  **not ported**.
+  described, choosing parts of the foot, foot close-ups, removing underwear anywhere except
+  the implied under-the-sheet moment above. v1's `undress` lines, `under` colours and
+  anything similar are **not ported**.
 - Lines are flirtatious, affectionate, funny; personality-specific (dolce, audace, timida,
   ironica), ported from v1 minus anything above.
 

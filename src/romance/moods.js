@@ -190,6 +190,7 @@ export const NARRATION = {
   night: ['La notte scivola via tra risate, sussurri e il fruscio della coperta.', 'Fuori canta un grillo. Dentro, il tempo si ferma.'],
   morning: ['La mattina dopo...'],
   later: ['Qualche ora dopo...'],
+  covers: ['Si infilano sotto le coperte...', 'La coperta è calda, la stanza in penombra...'],
   wait: ['Il tempo passa...'],
 };
 

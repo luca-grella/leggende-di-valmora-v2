@@ -85,7 +85,7 @@ export function createCams(ctx) {
       // slow push-in of a few centimetres (capped: far targets, like the view, must not pull the camera past the couple)
       const dir = new THREE.Vector3().subVectors(tgt, spec.position);
       const to = new THREE.Vector3().copy(spec.position).addScaledVector(dir.normalize(), Math.min(0.18, 0.07 * spec.position.distanceTo(tgt)));
-      const side = new THREE.Vector3().subVectors(tgt, spec.position).cross(new THREE.Vector3(0, 1, 0)).setLength(0.12);
+      const side = new THREE.Vector3().subVectors(tgt, spec.position).cross(new THREE.Vector3(0, 1, 0)).setLength(aspect() < 1 ? 0.05 : 0.12);
       to.add(side); to.y += 0.03;
       rig().shot({ position: to, target: live || spec.target, fov: (spec.fov || 30) - 1 }, { dur: 7 });
     });
@@ -93,10 +93,71 @@ export function createCams(ctx) {
   }
   const _la = new THREE.Vector3(), _lb = new THREE.Vector3(), _lt = new THREE.Vector3();
 
+  /** Rays from the subject points to the lens blocked by furniture / walls (0 = clear view). */
+  function blockedRays(pos, pts, list) {
+    let n = 0;
+    const dir = new THREE.Vector3();
+    for (const p of pts) {
+      dir.subVectors(pos, p); const d = dir.length(); if (d < 0.05) continue; dir.divideScalar(d);
+      ray.set(p, dir); ray.near = 0.12; ray.far = d;
+      if (ray.intersectObjects(list, false).length) n++;
+    }
+    return n;
+  }
+
   const cams = {
     headOf,
     /** Stop any pending drift (call before handing the camera back). */
     stop() { token++; },
+
+    /**
+     * Frame a set of live body points (heads, a foot, hands…) from the clearest of a few directions.
+     * getPts() → Vector3[] (re-read every frame when live); yaws: world directions target → lens; pitch: lens
+     * elevation (rad, > 0 = from above); minV: the smallest frame height (m) — keeps feet actions medium shots;
+     * margin; padTop / padBottom: shares of the frame hidden by the letterbox and the dialogue box; clamp(pos) → pos (bed cameras).
+     */
+    fit(getPts, { yaws = [0], pitch = 0.15, fov = 32, minV = 0.8, margin = 1.2, pad = 0.15, padTop = 0.11, padBottom = 0.27, dur = 1.1, clamp = null, live = true, drift = true } = {}) {
+      const pts0 = getPts();
+      if (!pts0.length) return Promise.resolve();
+      const asp = aspect(), tanV = Math.tan((fov * D2R) / 2), tanH = tanV * asp;
+      const center = (pts, out) => {
+        const mn = new THREE.Vector3(Infinity, Infinity, Infinity), mx = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+        for (const p of pts) { mn.min(p); mx.max(p); }
+        return out.addVectors(mn, mx).multiplyScalar(0.5);
+      };
+      const c = center(pts0, new THREE.Vector3());
+      const up0 = new THREE.Vector3(0, 1, 0);
+      let list = null;
+      try { list = solids(); } catch { list = []; }
+      let best = null;
+      for (const yaw of yaws) {
+        const back = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+        const right = new THREE.Vector3().crossVectors(up0, back).normalize();
+        const up = new THREE.Vector3().crossVectors(back, right);
+        // half extents of the subject in the camera plane, and how far toward the lens it reaches
+        let hx = 0, hy = 0, near = 0;
+        const d = new THREE.Vector3();
+        for (const p of pts0) { d.subVectors(p, c); hx = Math.max(hx, Math.abs(d.dot(right))); hy = Math.max(hy, Math.abs(d.dot(up))); near = Math.max(near, d.dot(back)); }
+        // points are joint centres: add the body's own size (big heads) before the margin
+        hy = Math.max((hy + pad) * margin, minV / 2); hx = Math.max((hx + pad) * margin, (minV / 2) * Math.min(1, asp));
+        // the subject sits in the visible band: the letterbox hides the top, letterbox + dialogue box the bottom
+        const T = hy / (1 - padTop - padBottom);
+        const dist = Math.max(T / tanV, hx / tanH) + near;
+        const shift = (padBottom - padTop) * T;
+        let position = new THREE.Vector3().copy(c).addScaledVector(back, dist).addScaledVector(up, -shift);
+        const target = new THREE.Vector3().copy(c).addScaledVector(up, -shift);
+        if (clamp) position = clamp(position.clone());
+        const score = blockedRays(position, pts0, list);
+        if (!best || score < best.score) best = { position, target, score };
+        if (score === 0) break;
+      }
+      const offs = new THREE.Vector3().copy(best.target).sub(c);
+      const _lt2 = new THREE.Vector3();
+      const liveFn = live ? () => center(getPts(), _lt2).add(offs) : null;
+      let spec = { position: best.position, target: best.target, fov };
+      if (best.score > 0 && !clamp) spec = clearShot(spec);
+      return go(spec, dur, drift, liveFn);
+    },
 
     /**
      * Two-shot of a (player) and b (her). tight: closer (kiss, hug, whisper).

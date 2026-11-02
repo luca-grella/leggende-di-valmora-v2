@@ -1,14 +1,15 @@
-// Romance scenes, acted with the real characters: the player's Human and her Npc's Human, posed with
-// ctx.actors.stagePair (pair kinds from docs/ARCHITECTURE.md) and framed by romance close-ups (cams.js:
-// faces and shoulders only). Three scene kinds:
+// Romance scenes, acted with the real characters: the player's Human and her Npc's Human. The home evening
+// and the date's moment are choreographed by acting.js (real furniture, visible transitions, hands / lips /
+// feet on the partner's body); outings pose with ctx.actors.stagePair. Close-ups: cams.js. Scene kinds:
 //   date(girl)          first date at her spot at her favourite time: she waits, a walk together, the view,
 //                       the first kiss, she invites you home
-//   home(girl)          evening at her place: candles, talk on the sofa, up to 3 rounds of ALLOWED_CHOICES, then
-//                       the night is implied (lie_blanket + top framing, heads and shoulders only) → morning after
+//   home(girl)          evening at her place: candles, the sofa, up to 3 rounds of ALLOWED_CHOICES, then to bed
+//                       (down to the underwear), under an opaque blanket, the implied moment → morning after
 //   outing(girl, kind)  osteria / scooter / bagno / picnic with props, extras and choices (outings.js)
 // Every intimate menu goes through validateChoices(); innocent extras through validateExtras().
-// Limits (docs/GDD.md "Romance"): characters stay clothed, no nudity/anatomy, nothing explicit is shown or
-// described, foot actions are medium two-shots of both faces, never a foot close-up.
+// Limits (docs/GDD.md "Romance"): never beyond the underwear (except the implied under-the-sheet moment, where
+// nothing below the shoulders is ever visible), no nudity/anatomy, nothing explicit shown or described, feet
+// actions are medium shots, never a foot close-up.
 import * as THREE from 'three';
 import { ALLOWED_CHOICES, CHOICE_FX, CHOICE_GROUPS, validateChoices, choiceLines } from './choices.js';
 import { OUTINGS, EXTRAS, validateExtras, inHours } from './outings.js';
@@ -19,6 +20,7 @@ import { createHearts, createMotes, createSplash, scatter } from './fx.js';
 import { buildTable, buildPicnic, buildBeach, buildCandles, buildScooterFallback } from './props.js';
 import { createClock, createSafe, pick, sample, fill } from './util.js';
 import { underwearLook } from '../actors/looks.js';
+import { createActing } from './acting.js';
 
 const TAU = Math.PI * 2;
 const WARM = { warmth: 0.22, saturation: 1.14, vignette: 0.4 };
@@ -42,6 +44,7 @@ export function createScenes(ctx, hooks = {}) {
   const cams = createCams(ctx);
   const hearts = createHearts(ctx);
   const splash = createSplash(ctx);
+  const acting = createActing(ctx, { clock, S, cams });
   clock.tick(dt => { hearts.update(dt); splash.update(dt); });
   let current = null;
 
@@ -176,6 +179,7 @@ export function createScenes(ctx, hooks = {}) {
 
   async function close(sc, { place = 'stay', fade = true } = {}) {
     const finish = async () => {
+      try { acting.end(sc); } catch (e) { console.warn('[romance] acting end', e); }
       try { if (sc.pair && ctx.actors?.endPair) await ctx.actors.endPair({ a: sc.a, b: sc.b, fade: 0 }); } catch (e) { console.warn('[romance] endPair', e); }
       sc.riding = false;
       for (const r of sc.restore.splice(0).reverse()) { try { r(); } catch (err) { console.warn('[romance] restore', err); } }
@@ -221,7 +225,8 @@ export function createScenes(ctx, hooks = {}) {
     try { h.setLook(look); } catch (e) { console.warn('[romance] setLook', e); return; }
     sc.restore.push(() => { try { h.setLook(before); } catch { /* optional */ } });
   }
-  const homeLook = g => ({ ...g.look, ...(g.homeLook || {}), hat: null });
+  // at home both are barefoot (shoes off at the door, behind the fade): feet actions never show shoes
+  const homeLook = g => ({ ...g.look, ...(g.homeLook || {}), hat: null, shoes: { style: 'barefoot', color: g.look.skin || '#f6d0b1' } });
   const swimLook = g => ({
     ...g.look, top: { style: 'swimsuit', color: g.swim?.color || g.color || '#26c6da', accent: '#ffffff' },
     bottom: { style: 'none', color: g.swim?.color || '#26c6da' }, shoes: { style: 'barefoot', color: g.look.skin }, hat: null, accessory: null,
@@ -417,6 +422,162 @@ export function createScenes(ctx, hooks = {}) {
     S.sfx('heart');
   }
 
+  // ---- the evening with real bodies (acting.js) -------------------------------------------------------
+  const SLIP_LINES = {
+    dolce: ['Shh... non guardare. ...Ecco.', 'Mi sento un po\' audace stasera...'],
+    audace: ['Ops. Mi è scivolato.', 'Questo non mi serve più, no?'],
+    timida: ['Non... non ridere, eh.', 'Chiudi gli occhi... ecco.'],
+    ironica: ['Ops. Che sbadata.', 'Dicevi di avere caldo? Pure io.'],
+  };
+  const underColor = g => g.underwear || g.color || null;
+
+  /** Remember to put the clothes back on when the scene closes (whatever happens). */
+  function keepClothes(sc) {
+    if (sc.clothesGuard) return;
+    sc.clothesGuard = true;
+    sc.restore.push(() => { for (const h of [sc.a, sc.b]) { try { if (h.outfit && h.outfit !== 'clothes') h.setOutfit('clothes'); } catch { /* optional */ } } sc.undressed = false; });
+  }
+
+  /** One choice acted with real contact, its close-up, hearts and her line. */
+  async function actReal(sc, set, id) {
+    validateChoices([id]);
+    const fx = CHOICE_FX[id] || {};
+    if (id === 'undress') {
+      keepClothes(sc);
+      await acting.undress(sc, set, { color: underColor(sc.girl) });
+      await acting.shot(sc, { dur: 0.9 });
+      S.sfx('heart'); heartsAt(sc.b, 2);
+      hooks.counted?.(sc.girl.id, 'undress');
+      await react(sc, 'blush', [choiceText(sc.girl, 'undress')]);
+      return;
+    }
+    await acting.act(sc, set, id);
+    await acting.shot(sc, { dur: 1.1 });
+    if (id === 'whisper') await narrate(NARRATION.whisper);
+    await clock.wait(0.9);                                    // let the gesture be seen before she speaks
+    S.sfx(fx.sfx || 'heart'); S.haptic(fx.hearts > 2 ? [12, 40, 12] : 10);
+    heartsAt(sc.b, fx.hearts || 1);
+    hooks.counted?.(sc.girl.id, id);
+    await react(sc, EXPRESSION[sc.girl.mood]?.[id] || 'smile', [choiceText(sc.girl, id)]);
+    await clock.wait(0.4);
+  }
+
+  /** Sofa, up to three rounds of choices, then the night. Returns true when the night was spent. */
+  async function evening(sc, girl) {
+    const set = acting.homeSet(girl);
+    sc.set = set;
+    acting.begin(sc);
+    // she takes him to the sofa: both walk there and sit down
+    acting.walkShot(sc);
+    await acting.goState(sc, set, set.sofa ? 'sofa' : 'stand');
+    S.lookAt(sc.a, sc.b.head, { weight: 0.7 }); S.lookAt(sc.b, sc.a.head, { weight: 0.7 });
+    S.expr(sc.a, 'smile'); S.expr(sc.b, 'smile');
+    await acting.shot(sc, { dur: 1.2 });
+    await sayHer(sc, [pick(lines(girl, 'rounds'))], { expression: 'smile' });
+
+    const allBase = Object.keys(ALLOWED_CHOICES).filter(k => k !== 'continue' && k !== 'stop' && k !== 'guide');
+    let how = null;
+    for (let r = 0; r < 3 && !how; r++) {
+      const all = allBase.filter(k => k !== 'undress' || !sc.undressed);
+      const title = r === 0 ? `${girl.name} ${heartsText(girl.id)}` : fill(pick(lines(girl, 'rounds')), vars(girl)) || '...';
+      const ch = await menu(sc, title, all, { guide: true, stop: true });
+      if (ch === 'stop' || ch === 'guide') how = ch;
+      else if (typeof ch === 'string') await actReal(sc, set, ch);
+    }
+    if (!how) {
+      const ids = validateChoices(['guide', 'continue', 'stop']);
+      const c = await S.choose(`${girl.name} ti prende la mano...`, ids.map(opt), { cancel: false });
+      how = ids[c] || 'continue';
+    }
+    if (!set.bed) {
+      // no bed in this house: the old implied night
+      await night(sc, sc.anchor || anchorOf(S.worldPos(sc.b), 0), how);
+      return true;
+    }
+    await nightReal(sc, set, how);
+    // up and about: dressed again, a last hug by the bed
+    await S.through(async () => {
+      await acting.dress(sc, { animate: false });
+      acting.release(sc, 0);
+      const B = set.bed, f = Math.atan2(B.Lx.x, B.Lx.z) + Math.PI / 2;
+      const p = B.at(-0.2, 1.75), F = { x: Math.sin(f), z: Math.cos(f) };
+      for (const [h, k] of [[sc.a, -1], [sc.b, 1]]) {
+        h.setSupport?.(null);
+        h.animator?.stopUpper?.(0); h.play('idle', { fade: 0 });
+        h.teleport(p.x + F.x * 0.3 * k, p.z + F.z * 0.3 * k, k < 0 ? f : f + Math.PI);
+        h.resetSprings?.();
+      }
+      sc.acting.state = 'stand';
+      acting.contacts(sc, set, 'hug');
+      await clock.wait(0.5);
+      await acting.twoShot(sc, { dur: 0, minV: 0.7 });
+    }, { ms: 500 });
+    heartsAt(sc.b, 3);
+    await sayHer(sc, [bondLine(girl)], { expression: 'smile' });
+    return true;
+  }
+
+  /**
+   * The night: to the bed (she leads for "Lasciati guidare da lei…"), down to the underwear if they are not
+   * already, on the edge of the bed, then under the blanket (behind a fade). For guide / continue, the
+   * implied moment under the sheet; then the night passes and the morning comes.
+   */
+  async function nightReal(sc, set, how) {
+    const g = sc.girl;
+    const gl = how === 'guide' ? guideLines(g) : null;
+    if (how === 'guide') {
+      S.expr(sc.b, EXPRESSION[g.mood]?.guide || 'smile');
+      heartsAt(sc.b, 4, { spread: 0.5 }); S.sfx('heart');
+      await sayHer(sc, [gl[0]]);
+    } else if (how === 'stop') await react(sc, 'smile', [one(g, 'stop')]);
+    await acting.toBed(sc, set, how === 'guide' ? 'guide' : 'together');
+    if (!sc.undressed) {
+      keepClothes(sc);
+      await acting.undress(sc, set, { color: underColor(g) });
+      await acting.shot(sc, { dur: 0.8 });
+      heartsAt(sc.b, 2); S.sfx('heart');
+      await react(sc, 'blush', [choiceText(g, 'undress')]);
+    }
+    await acting.sitBedEdge(sc, set);
+    await acting.shot(sc, { dur: 1.0 });
+    S.expr(sc.b, 'blush');
+    await clock.wait(1.4);
+    await S.fadeOut(900, '#1a0f24');
+    await clock.wait(0.4);
+    await narrate([pick(NARRATION.covers || NARRATION.later)]);
+    acting.intoBed(sc, set);
+    await clock.wait(0.3);
+    await acting.bedShot(sc, set, { dur: 0 });
+    await S.fadeIn(1200);
+    if (gl && gl.length > 1) await sayHer(sc, gl.slice(1), { expression: 'blush' });
+    if (how !== 'stop') {
+      // the implied moment under the sheet: only her shoulder / a moving bulge, then the garment on the floor
+      const landing = acting.landing(sc, set);
+      await acting.sideBedShot(sc, set, landing, { dur: 1.2 });
+      await acting.slipOff(sc, set, { color: underColor(g) });
+      await clock.wait(0.5);
+      await sayHer(sc, [pick(SLIP_LINES[g.mood] || SLIP_LINES.dolce)], { expression: 'smug' });
+      heartsAt(sc.b, 3, { size: 0.18 }); S.sfx('heart');
+      await acting.bedShot(sc, set, { dur: 1.4 });
+    }
+    S.expr(sc.b, 'sleepy', { dur: 0.6 });
+    await sayHer(sc, [one(g, 'bed')]);
+    heartsAt(sc.b, 2, { size: 0.16, rise: 0.6 });
+    await narrate([pick(NARRATION.night)]);
+    await S.fadeOut(1400, '#0b0820');
+    try { ctx.time?.skipTo?.(8); } catch { /* optional */ }
+    await clock.wait(0.6);
+    await narrate(NARRATION.morning);
+    await acting.bedShot(sc, set, { dur: 0 });
+    await S.fadeIn(1400);
+    S.expr(sc.b, 'sleepy');
+    await clock.wait(0.8);
+    S.expr(sc.b, 'smile', { dur: 0.6 });
+    await sayHer(sc, L(g, 'morning'));
+    heartsAt(sc.b, 3);
+    S.sfx('heart');
+  }
+
   // ---- places ------------------------------------------------------------------------------------
   function dateSpot(girl) {
     for (const id of [...(girl.dateSpot || []), `${girl.town}.date`, `${girl.town}.viewpoint`, `${girl.town}.plaza`, girl.poi]) {
@@ -505,8 +666,12 @@ export function createScenes(ctx, hooks = {}) {
       await cams.two(sc.a, sc.b, { tight: false });
       S.expr(sc.b, girl.mood === 'audace' ? 'smug' : 'blush');
       let ch = await menu(sc, `${girl.name} ti guarda negli occhi...`, ['kiss', 'hug', 'whisper'], { stop: false });
+      // real bodies: standing contact poses on free ground (acting.js); else the generic pair kinds
+      const real = acting.ok(sc);
+      if (real) { sc.set = {}; acting.begin(sc); }
+      const doAct = id => (real ? actReal(sc, {}, id) : act(sc, id, an));
       if (ch && ch !== 'kiss') {
-        await act(sc, ch, an);
+        await doAct(ch);
         S.expr(sc.b, 'blush');
         const nudge = { audace: 'E adesso? Non dirmi che ti fermi qui.', ironica: 'Tutto qui? ...Avanti, coraggio.', timida: 'E... e adesso?', dolce: 'E adesso... cosa aspetti?' };
         await sayHer(sc, [nudge[girl.mood] || nudge.dolce]);
@@ -514,7 +679,7 @@ export function createScenes(ctx, hooks = {}) {
       }
       if (ch === 'kiss') {
         kissed = true;
-        await act(sc, 'kiss', an);
+        await doAct('kiss');
         heartsAt(sc.b, 6, { spread: 0.6, size: 0.26 });
         S.sfx('heart'); S.haptic([15, 60, 15]);
         await sayHer(sc, L(girl, 'afterKiss'), { expression: girl.mood === 'timida' ? 'blush' : 'smile' });
@@ -550,7 +715,7 @@ export function createScenes(ctx, hooks = {}) {
       await S.through(async () => {
         if (late) { try { ctx.time?.skipTo?.(20.5); } catch { /* optional */ } }
         dress(sc, sc.b, homeLook(girl));
-        { const pl = playerLook(); if (pl?.hat) dress(sc, sc.a, { ...pl, hat: null }); }   // caps off indoors
+        { const pl = sc.a.look || playerLook(); if (pl) dress(sc, sc.a, { ...pl, hat: null, accessory: (pl.accessory?.style || pl.accessory) === 'backpack' ? null : pl.accessory, shoes: { style: 'barefoot', color: pl.skin || '#e0ac69' } }); }   // cap, backpack and shoes off indoors
         // candles on the table, by the bed and at the window; a heart of petals at the foot of the bed
         const clusters = [];
         if (table) clusters.push({ x: table.x, y: (table.y ?? S.groundY(table.x, table.z)) + 0.76, z: table.z, n: 3, seed: 1 });
@@ -565,7 +730,12 @@ export function createScenes(ctx, hooks = {}) {
         const f = meet.facing ?? 0;
         S.teleport(sc.b, meet.x, meet.z, f);
         const pd = door || { x: meet.x + Math.sin(f) * 1.6, z: meet.z + Math.cos(f) * 1.6 };
-        const ax = meet.x + (pd.x - meet.x) * 0.55, az = meet.z + (pd.z - meet.z) * 0.55;
+        // he stands between her and the door, on free floor (never inside the sofa / table in between)
+        const blockedAt = (x, z) => { try { return !!ctx.world?.colliders?.blocked?.(x, z, 0.32); } catch { return false; } };
+        let k = 0.55;
+        for (const t of [0.55, 0.45, 0.65, 0.35, 0.75, 0.85, 0.25]) { if (!blockedAt(meet.x + (pd.x - meet.x) * t, meet.z + (pd.z - meet.z) * t)) { k = t; break; } }
+        let ax = meet.x + (pd.x - meet.x) * k, az = meet.z + (pd.z - meet.z) * k;
+        if (blockedAt(ax, az) && ctx.actors?.findFree) { const fr = ctx.actors.findFree(ax, az, 0.32, { except: [sc.a, sc.b], maxDist: 1.5 }); ax = fr.x; az = fr.z; }
         S.teleport(sc.a, ax, az, Math.atan2(meet.x - ax, meet.z - az));
         S.face(sc.b, { x: ax, z: az }, { dur: 0 });
         await cams.two(sc.a, sc.b, { dur: 0 });
@@ -588,6 +758,12 @@ export function createScenes(ctx, hooks = {}) {
         }
       }
 
+      // real bodies: the evening is acted on the real furniture (romance/acting.js)
+      if (acting.ok(sc)) {
+        spent = await evening(sc, girl);
+        await close(sc, { place: exit });
+        return { night: spent };
+      }
       // anchors: seated kinds on the sofa, standing/kneeling ones on the floor in front of it (facing the bed)
       const f0 = sofa?.facing ?? meet.facing ?? 0;
       const seatA = sofa ? anchorOf(sofa, f0) : null;
@@ -912,7 +1088,7 @@ export function createScenes(ctx, hooks = {}) {
     date, home, outing,
     get active() { return !!current; },
     get current() { return current; },
-    hearts, cams,
+    hearts, cams, acting,
     /** Debug: abort a running scene (tests). */
     async abort() { if (current) await close(current, { fade: false }); },
   };
