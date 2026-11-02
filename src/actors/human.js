@@ -68,12 +68,7 @@ export function buildHuman(ctx, rawLook) {
   const L = rawLook?._n ? rawLook : { ...normalizeLook(rawLook), _n: true };
   const spec = rigSpec(L);
   const { bones, byName: B } = buildSkeleton(spec);
-  const RB = new RigBuilder(spec.order);
-  buildBody(RB, L, spec);
-  buildFace(RB, L, spec);
-  buildHair(RB, L, spec);
-  buildHat(RB, L, spec);
-  const { geometry, parts } = RB.build();
+  const { geometry, outlineGeometry: og, parts } = buildHumanGeometry(L, spec);
 
   const mesh = new THREE.SkinnedMesh(geometry, characterMaterial(ctx));
   mesh.name = 'human';
@@ -85,14 +80,6 @@ export function buildHuman(ctx, rawLook) {
   const sphere = new THREE.Sphere(V(0, 0.85 * spec.s, 0), 1.35);
   mesh.boundingSphere = sphere;
 
-  // outline: same vertex buffers, an index without the face details
-  const skip = new Uint8Array(geometry.attributes.position.count);
-  for (const [name, list] of Object.entries(parts)) if (FACE_PARTS.has(name)) for (const r of list) skip.fill(1, r.start, r.start + r.count);
-  const src = geometry.index.array, keep = [];
-  for (let i = 0; i < src.length; i += 3) if (!skip[src[i]] && !skip[src[i + 1]] && !skip[src[i + 2]]) keep.push(src[i], src[i + 1], src[i + 2]);
-  const og = new THREE.BufferGeometry();
-  for (const k of ['position', 'normal', 'skinIndex', 'skinWeight']) og.setAttribute(k, geometry.attributes[k]);
-  og.setIndex(keep);
   const outline = new THREE.SkinnedMesh(og, outlineMaterial(ctx?.toon?.palette?.outline));
   outline.name = 'human-outline'; outline.castShadow = false; outline.receiveShadow = false;
   outline.userData.isOutline = true; outline.raycast = () => {};
@@ -105,6 +92,30 @@ export function buildHuman(ctx, rawLook) {
   object.add(model); model.add(mesh, outline);
   const face = createFace(ctx, L, B, spec);
   return { object, model, mesh, outline, skeleton, bones: B, meshes: [mesh, outline], face, spec, look: L, height: (spec.top + 0.012) * L.height, parts };
+}
+
+/**
+ * Skinned geometry (+ the outline geometry sharing its buffers) of a look on the skeleton of `spec`. Two looks
+ * with the same sex/age/build share the skeleton, so an outfit swap only replaces these (human-api setOutfit).
+ */
+export function buildHumanGeometry(rawLook, spec = null) {
+  const L = rawLook?._n ? rawLook : { ...normalizeLook(rawLook), _n: true };
+  spec = spec || rigSpec(L);
+  const RB = new RigBuilder(spec.order);
+  buildBody(RB, L, spec);
+  buildFace(RB, L, spec);
+  buildHair(RB, L, spec);
+  buildHat(RB, L, spec);
+  const { geometry, parts } = RB.build();
+  // outline: same vertex buffers, an index without the face details
+  const skip = new Uint8Array(geometry.attributes.position.count);
+  for (const [name, list] of Object.entries(parts)) if (FACE_PARTS.has(name)) for (const r of list) skip.fill(1, r.start, r.start + r.count);
+  const src = geometry.index.array, keep = [];
+  for (let i = 0; i < src.length; i += 3) if (!skip[src[i]] && !skip[src[i + 1]] && !skip[src[i + 2]]) keep.push(src[i], src[i + 1], src[i + 2]);
+  const outlineGeometry = new THREE.BufferGeometry();
+  for (const k of ['position', 'normal', 'skinIndex', 'skinWeight']) outlineGeometry.setAttribute(k, geometry.attributes[k]);
+  outlineGeometry.setIndex(keep);
+  return { geometry, outlineGeometry, parts };
 }
 
 /** Anime-style face lighting: shading normals on the front of the head lean toward the viewer so the

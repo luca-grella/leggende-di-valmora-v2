@@ -8,6 +8,8 @@ import { PAIR_KINDS, stagePair, endPair } from './pairs.js';
 import { Human, HUMANS, clipLibrary } from './human-api.js';
 import { createNpcs } from './npc.js';
 import { createPlayer } from './player.js';
+import { createBodies } from './bodies.js';
+import { SURFACE_REGIONS } from './contact.js';
 
 /** @param {any} ctx */
 export function init(ctx) {
@@ -19,7 +21,11 @@ export function init(ctx) {
     stagePair: (kind, opts) => stagePair(ctx, kind, opts),
     endPair: opts => endPair(ctx, opts),
     get humans() { return HUMANS; },
+    SURFACE_REGIONS,
   };
+  // people never overlap each other (bodies.js); free-spot search for scripted placements
+  actors.bodies = createBodies(ctx, HUMANS);
+  actors.findFree = (x, z, r, o) => actors.bodies.findFree(x, z, r, o);
   const npcs = createNpcs(ctx, actors);
   Object.assign(actors, {
     spawnNpc: npcs.spawn, npc: npcs.get, removeNpc: npcs.remove, ambient: npcs.ambient, npcs: npcs.map, clearAmbient: npcs.clearAmbient,
@@ -32,6 +38,8 @@ export function init(ctx) {
       try { h.update(dt); } catch (e) { console.error('[actors] update', h.id, e); HUMANS.delete(h); }
     }
   }, ctx.ORDER?.actors ?? 20);
+
+  ctx.loop.add(function actorsBodies(dt) { try { actors.bodies.update(dt); } catch (e) { console.error('[actors] bodies', e); } }, (ctx.ORDER?.actors ?? 20) + 0.6);
 
   const player = createPlayer(ctx, actors);
   if (player) { ctx.player = player; actors.player = player; }

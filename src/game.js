@@ -36,49 +36,8 @@ export function init(ctx) {
   }, ctx.ORDER?.systems ?? 10);
 
   // ---------------------------------------------------------------- bodies never overlap
-  // The player and the NPCs are solid to each other: soft circle separation every frame (the player is
-  // pushed out of standing/talking NPCs; two walkers share the push), always through world.resolveMove so
-  // nobody is shoved into a wall or a prop. Characters staged in a pair scene are left alone.
-  const BODY_R = 0.31, crowd = [];
-  const shove = (pos, dx, dz, r) => {
-    const to = { x: pos.x + dx, z: pos.z + dz };
-    const q = ctx.world?.resolveMove?.({ x: pos.x, z: pos.z }, to, r) || to;
-    pos.x = q.x; pos.z = q.z;
-  };
-  ctx.loop.add(function bodies() {
-    const pl = ctx.player, npcs = ctx.actors?.npcs;
-    if (!pl?.object || pl.placeholder || !npcs) return;
-    const P = pl.object.position;
-    crowd.length = 0;
-    for (const n of npcs.values()) {
-      const h = n.human, o = h?.object;
-      if (!o || n.removed || !o.visible || !o.parent || h._pair) continue;
-      if (Math.abs(o.position.x - P.x) > 28 || Math.abs(o.position.z - P.z) > 28) continue;
-      crowd.push(n);
-    }
-    const playerFree = !pl.human?._pair && !pl.vehicle && pl.object.visible && !ctx.busy.has('scene') && !ctx.busy.has('cutscene');
-    const solid = n => n.frozen || n.talking || !n.human.moving;
-    if (playerFree) for (const n of crowd) {
-      const o = n.human.object.position;
-      let dx = P.x - o.x, dz = P.z - o.z; const d = Math.hypot(dx, dz), min = BODY_R * 2;
-      if (d >= min || Math.abs(P.y - o.y) > 1.2) continue;
-      if (d < 1e-4) { dx = Math.sin(pl.facing || 0); dz = Math.cos(pl.facing || 0); } else { dx /= d; dz /= d; }
-      const push = min - d, k = solid(n) ? 1 : 0.5;
-      shove(P, dx * push * k, dz * push * k, 0.35);
-      if (k < 1) shove(o, -dx * push * (1 - k), -dz * push * (1 - k), 0.3);
-    }
-    for (let i = 0; i < crowd.length; i++) for (let j = i + 1; j < crowd.length; j++) {
-      const A = crowd[i], B = crowd[j], a = A.human.object.position, b = B.human.object.position;
-      let dx = a.x - b.x, dz = a.z - b.z; const d = Math.hypot(dx, dz), min = BODY_R * 2;
-      if (d >= min || Math.abs(a.y - b.y) > 1.2) continue;
-      const sa = solid(A), sb = solid(B);
-      if (sa && sb && d > 0.05) continue;                    // two people chatting stay where they were placed
-      if (d < 1e-4) { dx = 1; dz = 0; } else { dx /= d; dz /= d; }
-      const push = min - d, ka = sa ? 0 : sb ? 1 : 0.5;
-      if (ka > 0) shove(a, dx * push * ka, dz * push * ka, 0.3);
-      if (ka < 1) shove(b, -dx * push * (1 - ka), -dz * push * (1 - ka), 0.3);
-    }
-  }, (ctx.ORDER?.actors ?? 20) + 0.6);
+  // Moved to the actors area (src/actors/bodies.js): every human (player, NPCs, trainers, scene actors) is a
+  // body capsule separated each frame through world.resolveMove, and autopilot walkers steer around people.
 
   // ---------------------------------------------------------------- safety nets
   let lastGood = null, check = 0;

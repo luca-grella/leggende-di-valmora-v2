@@ -1,9 +1,15 @@
 // Two-person staging (a = the player, b = a woman) for dialogue and romance scenes. Places both humans
-// around an anchor, plays coordinated clips and puts the hands where they belong with IK (around the back,
-// on the shoulders, in the hair, holding hands), sets look-at and expressions. Both always stay clothed;
-// `lie_blanket` adds a blanket from the shoulders down. Feet scenes are medium shots (no foot detail).
-// Camera framing is the caller's job (ctx.cameraRig.closeUp('romance' | 'romance_top', …)).
-//   stagePair(ctx, kind, {a, b, anchor:{x, y?, z, facing} | poiId, fade=0.6, seatY?, vehicle?, distance?}) → Promise
+// around an anchor, plays coordinated clips and makes the bodies really touch:
+//   - hands lie ON the partner's body surface (palms oriented on her shoulders, back, waist, hair, legs, feet)
+//     through Human.touch() contacts, with kneading / stroking motion along the surface;
+//   - mouths reach their target (lips, neck, ear, foot) with the spine→head CCD (Human.mouthTo);
+//   - a contact solver adjusts the spacing every frame: chests meet in a hug, lips meet in a kiss, the
+//     masseur moves until his hands rest on her, and bodies never interpenetrate (torso / head checks);
+//   - every body rests on its support (seat, floor, mattress) and feet stay planted;
+//   - standing poses are moved to free ground (no partner inside a table, a wall or a tree).
+// Clothes: as dressed by the caller (romance may swap to underwear with Human.setOutfit / undress — never less);
+// `lie_blanket` adds an opaque blanket from the shoulders down. Feet scenes are medium shots (camera: caller).
+//   stagePair(ctx, kind, {a, b, anchor:{x, y?, z, facing} | poiId, fade=0.6, seatY?, vehicle?, distance?, seat?}) → Promise
 //   endPair(ctx, {a, b, fade=0.6}) → Promise
 import * as THREE from 'three';
 import { SIT_H } from './clips.js';
@@ -11,8 +17,11 @@ import { Human } from './human-api.js';
 
 export const PAIR_KINDS = ['face', 'walk_together', 'sit_bench', 'sit_table', 'sit_ground', 'hug', 'kiss', 'stroke_hair', 'massage_shoulders', 'massage_back', 'massage_legs',
   'massage_feet', 'kiss_feet', 'kiss_neck', 'ear_nibble', 'whisper', 'guide', 'lie_blanket', 'picnic_lap', 'scooter_ride', 'swim'];
+/** Standing kinds: their anchor is moved to free ground. */
+const STANDING = new Set(['face', 'hug', 'kiss', 'stroke_hair', 'kiss_neck', 'ear_nibble', 'whisper']);
 
-const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion();
+const _v = new THREE.Vector3(), _w = new THREE.Vector3(), _q = new THREE.Quaternion(), _a = new THREE.Vector3(), _b = new THREE.Vector3();
+const _c = new THREE.Vector3(), _d = new THREE.Vector3();
 const PAIRS = new Set();
 let loopAdded = false;
 
@@ -23,6 +32,8 @@ const rightOf = (f) => ({ x: -Math.cos(f), z: Math.sin(f) });
 /** World "left" of a human right now. */
 const leftDir = (h, out) => out.set(1, 0, 0).applyQuaternion(h.object.getWorldQuaternion(_q)).setY(0).normalize();
 const fwdDir = (h, out) => out.set(0, 0, 1).applyQuaternion(h.object.getWorldQuaternion(_q)).setY(0).normalize();
+const ease = u => (u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2);
+const clamp = (x, a, b) => (x < a ? a : x > b ? b : x);
 
 function groundY(ctx, x, z) {
   const w = ctx.world;
@@ -38,31 +49,46 @@ function ensureLoop(ctx) {
     for (const p of PAIRS) {
       for (const tw of p.tweens) {
         tw.t = Math.min(1, tw.t + dt / tw.dur);
-        const e = tw.t < 0.5 ? 2 * tw.t * tw.t : 1 - (-2 * tw.t + 2) ** 2 / 2;
+        const e = ease(tw.t);
         tw.h.object.position.lerpVectors(tw.from, tw.to, e);
         tw.h.object.rotation.y = tw.r0 + tw.dr * e;
       }
       p.tweens = p.tweens.filter(t => t.t < 1);
       try { p.update?.(dt, p); } catch (e) { console.warn('[actors] pair update', e); }
+      if (!p.tweens.length) for (const f of p.fits) solveFit(f, dt);
     }
   }, (ctx.ORDER?.actors ?? 20) - 0.5);
+}
+
+/**
+ * Spacing solver: moves `h` along `dir` (from its authored `base`) so err() → 0 (err > 0 = move toward the
+ * partner). Bounded to [min, max] metres, eased.
+ */
+function solveFit(f, dt) {
+  const e = f.err(f);
+  if (!Number.isFinite(e)) return;
+  f.shift = clamp(f.shift + clamp(e, -0.12, 0.12) * Math.min(1, f.rate * dt), f.min, f.max);
+  f.h.object.position.set(f.base.x + f.dir.x * f.shift, f.h.object.position.y, f.base.z + f.dir.z * f.shift);
 }
 
 /** Find the NPC record owning a human (to freeze its wandering). */
 function npcOf(ctx, h) { for (const n of ctx.actors?.npcs?.values?.() || []) if (n.human === h) return n; return null; }
 
-function cleanup(ctx, p, { keepPlace = false } = {}) {
+function release(h, fade = 0.3) {
+  h.clearHandTargets(fade); h.clearFootTargets?.(fade); h.mouthTo?.(null, { fade });
+  h.stopUpper(fade); h.stop();
+}
+
+function cleanup(ctx, p) {
   PAIRS.delete(p);
   for (const o of p.props) { o.removeFromParent(); o.traverse?.(m => { if (m.geometry) m.geometry.dispose(); }); }
   p.props.length = 0;
   for (const h of [p.a, p.b]) {
     if (!h) continue;
     if (h._pair === p) h._pair = null;
-    h.clearHandTargets(0.3);
-    h.stopUpper(0.3);
-    h.stop();
+    h._partner = null;
+    release(h);
   }
-  if (!keepPlace) return;
 }
 
 /**
@@ -85,9 +111,14 @@ export async function stagePair(ctx, kind, opts = {}) {
   const smooth = !!prev && (opts.fade ?? 0.6) <= 0;                     // switching pose inside a scene: glide
   if (prev) cleanup(ctx, prev);
   if (b._pair && b._pair !== prev) cleanup(ctx, b._pair);
+  // standing poses: keep both bodies out of furniture / walls / trees
+  if (STANDING.has(kind) && !smooth && ctx.actors?.findFree) {
+    const fr = ctx.actors.findFree(anchor.x, anchor.z, 0.62, { except: [a, b], maxDist: 1.2, people: false });
+    anchor.x = fr.x; anchor.z = fr.z;
+  }
 
-  const p = { kind, a, b, anchor, props: [], tweens: [], update: null, t: 0, opts };
-  a._pair = b._pair = p;
+  const p = { kind, a, b, anchor, props: [], tweens: [], fits: [], update: null, t: 0, opts };
+  a._pair = b._pair = p; a._partner = b; b._partner = a;
   // lock both: player control off, NPC wandering frozen
   p.playerWasCtl = prev?.playerWasCtl ?? (ctx.player?.human === a ? ctx.player.control : null);
   if (ctx.player?.human === a && ctx.player.setControl) ctx.player.setControl(false);
@@ -113,15 +144,18 @@ export async function endPair(ctx, opts = {}) {
     const anchor = p?.anchor || (a ? { x: a.object.position.x, z: a.object.position.z, facing: a.facing } : null);
     if (p) cleanup(ctx, p);
     const f = anchor?.facing ?? 0, fw = fwdOf(f);
+    let ax = anchor.x, az = anchor.z;
+    if (ctx.actors?.findFree) { const fr = ctx.actors.findFree(ax, az, 0.62, { except: [a, b], maxDist: 2, people: false }); ax = fr.x; az = fr.z; }
     for (const [h, k] of [[a, -1], [b, 1]]) {
       if (!h) continue;
       h.lookAt(null); h.talk(false); h.setExpression('neutral', { dur: 0.4 });
+      h.setSupport?.(null);
       if (h.attached?.('back')?.userData?.pairProp) h.attach('back', null);
       const wasDown = h.clip !== 'locomotion';
       if (fade > 0) { h.animator.stopUpper(0); h.animator.play('locomotion', { fade: 0 }); }
       else h.play('idle', { fade: 0.5 });
       if (wasDown || fade > 0) {
-        const x = anchor.x + fw.x * 0.55 * k, z = anchor.z + fw.z * 0.55 * k;
+        const x = ax + fw.x * 0.55 * k, z = az + fw.z * 0.55 * k;
         h.teleport(x, z, k < 0 ? f : f + Math.PI);
       }
       h.object.position.y = groundY(ctx, h.object.position.x, h.object.position.z);
@@ -139,6 +173,23 @@ export async function endPair(ctx, opts = {}) {
   ctx.bus?.emit('pair:end', { kind: p?.kind || null });
 }
 
+// ------------------------------------------------------------------------------------------------ contact measures
+/** Signed gap between two surface points along `dir` (> 0: apart, < 0: overlapping). */
+function gap(h1, r1, p1, h2, r2, p2, dir) {
+  h1.surface(r1, p1, _a); h2.surface(r2, p2, _b);
+  return _b.sub(_a).dot(dir);
+}
+/** Overlap (m, ≥ 0) of the two heads (ellipsoids approximated by spheres). */
+function headOverlap(h1, h2, k = 0.86) {
+  h1.head.getWorldPosition(_a); h2.head.getWorldPosition(_b);
+  const r = (h1.spec.headR[0] * h1.look.height + h2.spec.headR[0] * h2.look.height) * k;
+  return Math.max(0, r - _a.distanceTo(_b));
+}
+const avgHands = (h) => (h.reachError.L + h.reachError.R) * 0.5;
+/** Signed reach error along a fit's direction (> 0: the target is further on → move toward it). */
+const proj = (v, f) => v.x * f.dir.x + v.z * f.dir.z;
+const handsAlong = (h, f) => (proj(h.reachVec.L, f) + proj(h.reachVec.R, f)) * 0.5;
+
 // ------------------------------------------------------------------------------------------------
 function setup(ctx, p, smooth) {
   const { a, b, anchor, kind, opts } = p;
@@ -152,16 +203,23 @@ function setup(ctx, p, smooth) {
     const near = h.object.position.distanceTo(to) < 1.2;
     if (smooth && near) {
       const r0 = h.object.rotation.y; let dr = (facing - r0) % (Math.PI * 2); if (dr > Math.PI) dr -= Math.PI * 2; if (dr < -Math.PI) dr += Math.PI * 2;
-      p.tweens.push({ h, from: h.object.position.clone(), to, r0, dr, t: 0, dur: 0.55 });
+      p.tweens.push({ h, from: h.object.position.clone(), to, r0, dr, t: 0, dur: 0.6 });
     } else { h.object.position.copy(to); h.object.rotation.y = facing; h.resetSprings(); }
     if (ctx.player?.human === h) ctx.player.facing = facing;
+    return to;
+  };
+  /** Spacing solver for h (moves along the anchor axis toward / away from the partner). */
+  const fit = (h, base, dirSign, err, { min = -0.25, max = 0.3, rate = 5 } = {}) => {
+    p.fits.push({ h, base: base.clone(), dir: { x: fw.x * dirSign, z: fw.z * dirSign }, shift: 0, min, max, rate, err });
   };
   const clip = (h, name, o = {}) => h.play(name, { fade: smooth ? 0.5 : 0, loop: true, ...o });
   const upper = (h, name) => h.play(name, { layer: 'upper', fade: smooth ? 0.5 : 0.01, loop: true });
   const look = (h, t, w = 1) => h.lookAt(t, { weight: w });
   const expr = (h, e) => h.setExpression(e, { dur: smooth ? 0.4 : 0.05 });
-  const fade = smooth ? 0.5 : 0.08;
+  const fade = smooth ? 0.55 : 0.12;
   const back = f + Math.PI;
+  const axis = new THREE.Vector3(fw.x, 0, fw.z);                        // a → b direction for face-to-face kinds
+  for (const h of [a, b]) h.setSupport(null);
 
   switch (kind) {
     case 'face': {
@@ -176,15 +234,24 @@ function setup(ctx, p, smooth) {
       if (guide) { put(a, at(-0.35, 0.12), f); put(b, at(0.35, -0.12), f); }
       else { put(a, at(0, -0.3), f); put(b, at(0, 0.3), f); }
       clip(a, 'idle'); clip(b, 'idle');
-      // hands meet between the two shoulders, at hip height
+      // her hand goes to the meeting point between the two shoulders; his palm closes on hers
       const meet = (out) => {
         a.bonePos(guide ? 'shoulder_L' : 'shoulder_R', out); b.bonePos(guide ? 'shoulder_R' : 'shoulder_L', _w);
         out.add(_w).multiplyScalar(0.5); out.y -= 0.5 * a.look.height;
         if (!guide) { fwdDir(a, _w); out.addScaledVector(_w, 0.06); }
         return out;
       };
-      if (guide) { upper(a, 'follow_hand'); upper(b, 'lead_hand'); a.setHandTarget('L', meet, { fade: 0.5 }); b.setHandTarget('R', meet, { fade: 0.5 }); look(a, b); look(b, a, 0.6); expr(b, 'smug'); expr(a, 'blush'); }
-      else { upper(a, 'hold_hand_R'); upper(b, 'hold_hand_L'); a.setHandTarget('R', meet, { fade: 0.5 }); b.setHandTarget('L', meet, { fade: 0.5 }); look(a, b, 0.5); look(b, a, 0.5); expr(a, 'smile'); expr(b, 'smile'); }
+      if (guide) {
+        upper(a, 'follow_hand'); upper(b, 'lead_hand');
+        b.setHandTarget('R', meet, { fade: 0.5 });
+        a.touch('L', b, 'hand_R', {}, { fade: 0.6, press: 0.006 });
+        look(a, b); look(b, a, 0.6); expr(b, 'smug'); expr(a, 'blush');
+      } else {
+        upper(a, 'hold_hand_R'); upper(b, 'hold_hand_L');
+        b.setHandTarget('L', meet, { fade: 0.5 });
+        a.touch('R', b, 'hand_L', {}, { fade: 0.6, press: 0.006 });
+        look(a, b, 0.5); look(b, a, 0.5); expr(a, 'smile'); expr(b, 'smile');
+      }
       // stroll forward together after the cut
       p.t = 0;
       p.update = (dt) => {
@@ -199,125 +266,171 @@ function setup(ctx, p, smooth) {
       break;
     }
     case 'sit_bench': {
-      const y = seatY - SIT_H;
-      put(a, at(0, -0.3), f, y); put(b, at(0, 0.3), f, y);
+      put(a, at(0, -0.3), f, floor); put(b, at(0, 0.3), f, floor);
+      a.setSupport({ seatY, floorY: floor }); b.setSupport({ seatY, floorY: floor });
       clip(a, 'sit_idle'); clip(b, 'sit_idle');
       look(a, b, 0.7); look(b, a, 0.6); expr(a, 'smile'); expr(b, 'smile');
       break;
     }
     case 'sit_table': {
-      const y = seatY - SIT_H;
-      put(a, at(-0.72, 0), f, y); put(b, at(0.72, 0), back, y);
+      put(a, at(-0.72, 0), f, floor); put(b, at(0.72, 0), back, floor);
+      a.setSupport({ seatY, floorY: floor }); b.setSupport({ seatY, floorY: floor });
       clip(a, 'sit_idle'); clip(b, 'sit_idle');
       look(a, b); look(b, a); expr(a, 'smile'); expr(b, 'smile');
       break;
     }
     case 'sit_ground': {
-      put(a, at(0, -0.3), f); put(b, at(0, 0.3), f);
+      put(a, at(0, -0.33), f); put(b, at(0, 0.33), f);
+      a.setSupport({ floorY: floor }); b.setSupport({ floorY: floor });
       clip(a, 'sit_ground'); clip(b, 'sit_knees');
       look(a, b, 0.6); look(b, a, 0.7); expr(a, 'smile'); expr(b, 'blush');
       break;
     }
     case 'hug': {
-      put(a, at(-0.2, 0), f); put(b, at(0.2, 0), back);
+      const pa = put(a, at(-0.24, 0), f); put(b, at(0.24, 0), back);
       clip(a, 'hug'); clip(b, 'hug_high');
-      a.setHandTarget('L', behind(b, 'spine', -0.07, 0.13, a, 1), { fade });
-      a.setHandTarget('R', behind(b, 'spine', 0.0, 0.13, a, -1), { fade });
-      b.setHandTarget('L', behind(a, 'neck', -0.06, 0.1, b, 1), { fade });
-      b.setHandTarget('R', behind(a, 'neck', -0.06, 0.1, b, -1), { fade });
+      // his arms around her back (left hand on her back-right, right hand higher on her back-left)
+      a.touch('L', b, 'torso', { u: 0.42, a: -Math.PI + 0.75 }, { fade, slide: t => ({ u: 0.42 + 0.03 * Math.sin(t * 0.9) }) });
+      a.touch('R', b, 'torso', { u: 0.7, a: Math.PI - 0.7 }, { fade, slide: t => ({ u: 0.7 + 0.03 * Math.sin(t * 0.8 + 1) }) });
+      // her arms around his neck / upper back
+      b.touch('L', a, 'torso', { u: 0.98, a: -Math.PI + 0.55 }, { fade, elbow: 'down' });
+      b.touch('R', a, 'torso', { u: 0.98, a: Math.PI - 0.55 }, { fade, elbow: 'down' });
+      // chests meet (slightly pressed), never through each other
+      fit(a, pa, 1, () => gap(a, 'chest', { u: 0.68 }, b, 'chest', { u: 0.68 }, axis) + 0.004 - 2 * headOverlap(a, b, 0.75), { min: -0.2, max: 0.18 });
       look(a, null); look(b, null); expr(a, 'closed'); expr(b, 'blush');
       break;
     }
     case 'kiss': {
-      put(a, at(-0.21, 0), f); put(b, at(0.21, 0), back);
+      const pa = put(a, at(-0.23, 0), f); put(b, at(0.23, 0), back);
       clip(a, 'kiss_lean'); clip(b, 'kiss_receive');
-      a.setHandTarget('L', side(b, 'spine', 0.02, -1, 0.12), { fade });
-      a.setHandTarget('R', side(b, 'spine', 0.02, 1, 0.12), { fade });
-      b.setHandTarget('L', behind(a, 'neck', -0.04, 0.09, b, 1), { fade });
-      b.setHandTarget('R', behind(a, 'neck', -0.04, 0.09, b, -1), { fade });
-      look(a, b, 0.5); look(b, a, 0.5); expr(a, 'kiss'); expr(b, 'kiss');
+      a.touch('L', b, 'torso', { u: 0.24, a: -Math.PI / 2 - 0.35 }, { fade });       // hands on her waist
+      a.touch('R', b, 'torso', { u: 0.24, a: Math.PI / 2 + 0.35 }, { fade });
+      b.touch('L', a, 'neck', { u: 0.4, a: -Math.PI + 0.9 }, { fade, elbow: 'down' }); // hers behind his neck
+      b.touch('R', a, 'neck', { u: 0.4, a: Math.PI - 0.9 }, { fade, elbow: 'down' });
+      // lips meet halfway (each mouth stops just before the middle point)
+      const mid = (h, other, out) => { h.surface('mouth', {}, out); other.surface('mouth', {}, _w); _d.subVectors(_w, out); const L = _d.length(); out.addScaledVector(_d, L > 0.012 ? (L - 0.012) / (2 * L) : 0); return out; };
+      a.mouthTo((out) => mid(a, b, out), { fade: smooth ? 0.7 : 0.25 });
+      b.mouthTo((out) => mid(b, a, out), { weight: 0.75, fade: smooth ? 0.7 : 0.25 });
+      fit(a, pa, 1, (fx) => proj(a.reachVec.mouth, fx) - proj(b.reachVec.mouth, fx) - 3 * headOverlap(a, b, 0.8)
+        - 2 * Math.max(0, -gap(a, 'chest', { u: 0.68 }, b, 'chest', { u: 0.68 }, axis)), { min: -0.2, max: 0.2 });
+      look(a, b, 0.3); look(b, a, 0.3); expr(a, 'kiss'); expr(b, 'kiss');
       break;
     }
     case 'stroke_hair': {
-      put(a, at(-0.27, 0), f); put(b, at(0.27, 0), back);
+      const pa = put(a, at(-0.3, 0), f); put(b, at(0.3, 0), back);
       clip(a, 'idle'); clip(b, 'shy'); upper(a, 'stroke');
-      // the hand slides down her hair from the crown to the shoulder, lifts away and starts again
-      a.setHandTarget('R', (out, t) => {
-        const u = (t / 2.6) % 1, down = Math.min(1, u / 0.7), lift = u > 0.7 ? Math.sin(((u - 0.7) / 0.3) * Math.PI) : 0;
-        const e = down < 0.5 ? 2 * down * down : 1 - (-2 * down + 2) ** 2 / 2;
-        b.head.getWorldPosition(out); leftDir(b, _w);
-        const yTop = 0.12, yLow = -0.12;
-        out.y += (u > 0.7 ? yLow + (yTop - yLow) * ((u - 0.7) / 0.3) : yTop + (yLow - yTop) * e) * b.look.height;
-        out.addScaledVector(_w, (0.14 + 0.05 * lift) * b.look.height);
-        fwdDir(b, _w); out.addScaledVector(_w, -0.03);
-        return out;
-      }, { fade: 0.6 });
+      // his right palm slides down the side of her hair (temple → behind the ear → shoulder), lifts off and starts again
+      a.touch('R', b, 'head', { el: 0.7, az: Math.PI / 2 - 0.15, hair: true }, {
+        fade: 0.6, fingers: 'down', elbow: 'down',
+        slide: (t) => {
+          const u = (t / 3) % 1, down = Math.min(1, u / 0.72), e = ease(down);
+          if (u <= 0.72) return { el: 0.75 - 1.0 * e, az: Math.PI / 2 - 0.15 + 0.4 * e, lift: 0.003 };
+          const r = (u - 0.72) / 0.28;
+          return { el: -0.25 + 1.0 * r, az: Math.PI / 2 + 0.25 - 0.4 * r, lift: 0.003 + 0.05 * Math.sin(Math.PI * r) };
+        },
+      });
+      fit(a, pa, 1, (fx) => proj(a.reachVec.R, fx) - 4 * headOverlap(a, b, 1.35) - 2 * Math.max(0, 0.08 - gap(a, 'chest', { u: 0.68 }, b, 'chest', { u: 0.68 }, axis)), { min: -0.15, max: 0.15 });
       look(a, b); look(b, a, 0.4); expr(a, 'smile'); expr(b, 'closed');
       break;
     }
     case 'massage_shoulders': case 'massage_back': {
       const backRub = kind === 'massage_back';
       const seated = opts.seat === true;
-      if (seated) { put(b, at(0, 0), f, seatY - SIT_H); clip(b, 'sit_idle'); put(a, at(-0.42, 0), f, floor); clip(a, 'idle'); }
-      else { put(b, at(0.05, 0), f); clip(b, 'sit_knees'); put(a, at(-0.5, 0), f); clip(a, 'kneel'); }
+      let pa;
+      if (seated) {
+        put(b, at(0, 0), f, floor); b.setSupport({ seatY, floorY: floor }); clip(b, 'sit_idle');
+        pa = put(a, at(-0.45, 0), f, floor); clip(a, 'idle');
+      } else {
+        put(b, at(0.05, 0), f); b.setSupport({ floorY: floor }); clip(b, 'sit_knees');
+        pa = put(a, at(-0.52, 0), f); a.setSupport({ floorY: floor }); clip(a, 'kneel');
+      }
       upper(a, 'massage');
       for (const [s, k, ph] of [['L', 1, 0], ['R', -1, Math.PI]]) {
-        a.setHandTarget(s, (out, t) => {
-          if (backRub) { b.bonePos('spine', out); fwdDir(b, _w); out.addScaledVector(_w, -0.12 * b.look.height); leftDir(b, _w); out.addScaledVector(_w, 0.06 * k); out.y += 0.05 + 0.05 * Math.sin(t * 1.6 + ph); }
-          else { b.bonePos(k > 0 ? 'shoulder_L' : 'shoulder_R', out); leftDir(b, _w); out.addScaledVector(_w, 0.05 * k); out.y += 0.05; fwdDir(b, _w); out.addScaledVector(_w, -0.02); }
-          // kneading circles, the hands alternate
-          out.y += 0.012 * Math.sin(t * 4.2 + ph); fwdDir(b, _w); out.addScaledVector(_w, 0.012 * Math.cos(t * 4.2 + ph));
-          return out;
-        }, { fade: 0.5 });
+        if (backRub) {
+          // palms flat on her back, fingers up, kneading circles that travel up and down either side of the spine
+          a.touch(s, b, 'torso', { u: 0.5, a: Math.PI - 0.38 * k }, {
+            fade: 0.5, fingers: 'up', press: 0.008,
+            slide: (t) => ({ u: 0.45 + 0.28 * Math.sin(t * 0.55 + ph * 0.25) + 0.03 * Math.sin(t * 4 + ph), a: Math.PI - k * (0.38 + 0.06 * Math.cos(t * 4 + ph)), lift: 0.003 * (1 + Math.sin(t * 4 + ph)) }),
+          });
+        } else {
+          // palms on top of her shoulders, fingers forward over them, alternating squeeze
+          a.touch(s, b, `shoulder_${s}`, { u: 0.55 }, {
+            fade: 0.5, press: 0.008,
+            slide: (t) => ({ u: 0.5 + 0.14 * Math.sin(t * 0.7 + ph * 0.2) + 0.04 * Math.sin(t * 4.2 + ph), lift: 0.004 * (1 + Math.sin(t * 4.2 + ph)) }),
+          });
+        }
       }
+      // close enough for the hands, never chest-into-back
+      fit(a, pa, 1, (fx) => handsAlong(a, fx) - 3 * Math.max(0, 0.035 - gap(a, 'chest', { u: 0.6 }, b, 'back', { u: 0.6 }, axis)) - 2 * headOverlap(a, b, 1.0), { min: -0.2, max: 0.25 });
       look(a, b, 0.5); look(b, null); expr(a, 'smile'); expr(b, 'closed');
       break;
     }
     case 'massage_legs': {
-      put(b, at(0, 0), f); clip(b, 'sit_legs');
-      // he kneels at her right side, facing her legs
-      put(a, at(0.45, 0.48), f - Math.PI / 2 + 0.25); clip(a, 'kneel'); upper(a, 'massage');
-      for (const [s, ph] of [['L', 0], ['R', Math.PI]]) {
-        a.setHandTarget(s, (out, t) => {
-          const u = 0.5 + 0.5 * Math.sin(t * 1.3 + ph * 0.3);
-          b.bonePos(s === 'L' ? 'shin_R' : 'shin_L', out); b.bonePos(s === 'L' ? 'thigh_R' : 'thigh_L', _w);
-          out.lerp(_w, 0.25 + 0.35 * u); out.y += 0.07;
-          return out;
-        }, { fade: 0.5 });
-      }
+      put(b, at(0, 0), f); b.setSupport({ floorY: floor }); clip(b, 'sit_legs');
+      // he kneels back on his heels at her right side, facing her legs, and leans in from the hips
+      const pa = put(a, at(0.42, 0.62), f + Math.PI / 2 - 0.2); a.setSupport({ floorY: floor }); clip(a, 'kneel_reach');
+      // palms travel along her right leg: thigh → knee → calf, and back
+      const leg = (ph) => (t) => {
+        const u = 0.5 + 0.5 * Math.sin(t * 0.6 + ph);
+        return u < 0.5 ? { region: 'thigh_R', u: 0.35 + u * 1.2, a: 0.3, lift: 0.003 * (1 + Math.sin(t * 4 + ph)) } : { region: 'shin_R', u: (u - 0.5) * 1.3, a: 0.25, lift: 0.003 * (1 + Math.sin(t * 4 + ph)) };
+      };
+      a.touch('L', b, 'thigh_R', {}, { fade: 0.5, slide: leg(0), press: 0.006 });
+      a.touch('R', b, 'thigh_R', {}, { fade: 0.5, slide: leg(0.9), press: 0.006 });
+      p.fits.push({ h: a, base: pa.clone(), dir: { x: -rt.x, z: -rt.z }, shift: 0, min: -0.25, max: 0.3, rate: 4, err: (fx) => handsAlong(a, fx) });
       look(a, b, 0.5); look(b, a, 0.7); expr(a, 'smile'); expr(b, 'blush');
       break;
     }
     case 'massage_feet': case 'kiss_feet': {
       const kissing = kind === 'kiss_feet';
-      put(b, at(0, 0), f, seatY - SIT_H); clip(b, 'sit_feet');
-      put(a, at(kissing ? 0.92 : 1.0, 0.05), back); clip(a, kissing ? 'kneel_bow' : 'kneel'); upper(a, 'massage');
-      a.setHandTarget('L', (out, t) => { b.bonePos('foot_R', out); out.y += 0.05; leftDir(a, _w); out.addScaledVector(_w, 0.05); out.y += 0.01 * Math.sin(t * 3); return out; }, { fade: 0.5 });
-      a.setHandTarget('R', (out, t) => { b.bonePos('foot_R', out); out.y += 0.03; leftDir(a, _w); out.addScaledVector(_w, -0.05); fwdDir(a, _w); out.addScaledVector(_w, 0.03 + 0.012 * Math.sin(t * 3 + 1)); return out; }, { fade: 0.5 });
-      look(a, kissing ? b.bones.foot_R : b, kissing ? 0.8 : 0.6); look(b, a, 0.8);
+      put(b, at(0, 0), f, floor); b.setSupport({ seatY, floorY: floor }); clip(b, 'sit_feet');
+      const pa = put(a, at(kissing ? 0.95 : 0.9, 0.1), back); a.setSupport({ floorY: floor }); clip(a, 'kneel_sit');
+      if (kissing) {
+        // she raises her right foot in front of his face (a medium shot shows foot and face clearly)
+        const q = at(0.6, 0.1), spot = new THREE.Vector3(q.x, seatY + 0.12, q.z);
+        b.setFootTarget('R', spot, { fade: 1.0, normal: new THREE.Vector3(-fw.x, 1.3, -fw.z).normalize() });
+        // his hands cradle it: one under the heel / sole, one on the ankle
+        a.touch('L', b, 'foot_R', { sole: true }, { fade: 0.7, press: 0.006, elbow: 'down' });
+        a.touch('R', b, 'foot_R', { u: 0.04 }, { fade: 0.7, press: 0.006, elbow: 'down' });
+        // the kisses move by themselves between the top of the foot, the toes and the ankle (no menu, no close-up)
+        const spots = [0.5, 0.95, 0.12, 0.62, 0.9, 0.2];
+        a.mouthTo({ human: b, region: 'foot_R', offset: 0.008, slide: (t) => {
+          const T = 3.2, i = Math.floor(t / T), u = (t % T) / T, e = ease(clamp((u - 0.7) / 0.3, 0, 1));
+          const s0 = spots[i % spots.length], s1 = spots[(i + 1) % spots.length];
+          return { u: s0 + (s1 - s0) * e, lift: 0.03 * Math.sin(Math.PI * e) };
+        } }, { fade: 0.9 });
+        fit(a, pa, -1, (fx) => proj(a.reachVec.mouth, fx) * 0.7 + handsAlong(a, fx) * 0.3, { min: -0.3, max: 0.35 });
+      } else {
+        // her right foot rests on his lap; he massages it with both hands (instep and sole)
+        b.setFootTarget('R', { human: a, region: 'lap_L', params: { u: 0.62 } }, { fade: 1.0 });
+        a.touch('L', b, 'foot_R', { sole: true }, { fade: 0.7, press: 0.006, elbow: 'down', slide: t => ({ lift: 0.002 * (1 + Math.sin(t * 3)) }) });
+        a.touch('R', b, 'foot_R', { u: 0.45 }, { fade: 0.7, press: 0.006, slide: t => ({ u: 0.4 + 0.15 * Math.sin(t * 1.4), lift: 0.003 * (1 + Math.sin(t * 4.5)) }) });
+        fit(a, pa, -1, (fx) => -proj(b.reachVec.footR, fx) + handsAlong(a, fx) * 0.3, { min: -0.3, max: 0.35 });
+      }
+      look(a, kissing ? null : b, 0.6); look(b, a, 0.8);
       expr(a, kissing ? 'kiss' : 'smile'); expr(b, kissing ? 'laugh' : 'smile');
       break;
     }
-    case 'kiss_neck': case 'ear_nibble': {
-      const ear = kind === 'ear_nibble';
-      put(a, at(-0.2, -0.06), f + 0.12); put(b, at(0.2, 0.06), back + 0.12);
-      clip(a, 'lean_neck'); clip(b, ear ? 'shy' : 'tilt_away');
-      a.setHandTarget('L', side(b, 'spine', 0.03, -1, 0.12), { fade });
-      a.setHandTarget('R', side(b, 'spine', 0.03, 1, 0.12), { fade });
-      look(a, null); look(b, null);
-      expr(a, ear ? 'grin' : 'closed'); expr(b, ear ? 'laugh' : 'closed');
-      break;
-    }
-    case 'whisper': {
-      put(a, at(-0.22, -0.1), f + 0.25); put(b, at(0.24, 0.05), back + 0.3);
-      clip(a, 'whisper'); clip(b, 'shy');
-      look(a, b, 0.3); look(b, null); expr(a, 'smug'); expr(b, 'blush');
+    case 'kiss_neck': case 'ear_nibble': case 'whisper': {
+      const ear = kind === 'ear_nibble', wh = kind === 'whisper';
+      const pa = put(a, at(-0.2, -0.07), f + 0.14); put(b, at(0.2, 0.07), back + 0.14);
+      clip(a, wh ? 'whisper' : 'lean_neck'); clip(b, ear ? 'shy' : wh ? 'shy' : 'tilt_away');
+      if (!wh) {
+        a.touch('L', b, 'torso', { u: 0.24, a: -Math.PI / 2 - 0.35 }, { fade });
+        a.touch('R', b, 'torso', { u: 0.24, a: Math.PI / 2 + 0.35 }, { fade });
+      } else b.touch('L', a, 'torso', { u: 0.7, a: -0.5 }, { fade });
+      // the clips lean his head to his left = her right side
+      const region = ear || wh ? 'ear_R' : 'neck_R';
+      a.mouthTo({ human: b, region, offset: wh ? 0.03 : ear ? 0.004 : 0.006, slide: ear || wh ? null : (t) => ({ u: 0.35 + 0.15 * Math.sin(t * 0.7), a: -Math.PI / 2 - 0.25 + 0.15 * Math.sin(t * 0.5) }) }, { fade: smooth ? 0.7 : 0.3, weight: wh ? 0.85 : 1 });
+      fit(a, pa, 1, (fx) => proj(a.reachVec.mouth, fx) - 3 * headOverlap(a, b, 0.7) - 2 * Math.max(0, -gap(a, 'chest', { u: 0.68 }, b, 'chest', { u: 0.68 }, axis)), { min: -0.2, max: 0.22 });
+      look(a, null); look(b, wh ? a : null, 0.3);
+      expr(a, ear ? 'grin' : wh ? 'smug' : 'closed'); expr(b, ear ? 'laugh' : wh ? 'blush' : 'closed');
       break;
     }
     case 'lie_blanket': {
       // anchor = bed centre (y = mattress top), facing = where the heads are
       const y = Number.isFinite(anchor.y) ? anchor.y : floor + 0.5;
       put(a, at(-0.06, -0.3), back, y); put(b, at(-0.06, 0.3), back, y);
+      a.setSupport({ lieY: y, floorY: y }); b.setSupport({ lieY: y, floorY: y });
       clip(a, 'lie_back'); clip(b, 'lie_back');
       look(a, b); look(b, a); expr(a, 'smile'); expr(b, 'blush');
       // wide and a little high: it must hide the bed's own duvet/sheets underneath
@@ -328,13 +441,15 @@ function setup(ctx, p, smooth) {
       break;
     }
     case 'picnic_lap': {
-      put(b, at(0, 0), f); clip(b, 'sit_legs');
+      put(b, at(0, 0), f); b.setSupport({ floorY: floor }); clip(b, 'sit_legs');
       // he lies at her right side with his head on her lap
       const head = at(0.36, 0.02), dir = { x: -rt.x, z: -rt.z };          // body → head points to her left (toward her lap)
       const hips = { x: head.x - dir.x * 0.63, z: head.z - dir.z * 0.63 };
-      put(a, hips, Math.atan2(dir.x, dir.z) + Math.PI, floor + 0.07);
+      put(a, hips, Math.atan2(dir.x, dir.z) + Math.PI, floor);
+      a.setSupport({ lieY: floor, floorY: floor });
       clip(a, 'lie_back');
-      b.setHandTarget('R', (out, t) => { a.head.getWorldPosition(out); out.y += 0.12 + 0.015 * Math.sin(t * 1.4); fwdDir(b, _w); out.addScaledVector(_w, 0.02 * Math.cos(t * 1.4)); return out; }, { fade: 0.6 });
+      // her palm rests on his hair, stroking slowly
+      b.touch('R', a, 'head', { el: 0.6, az: 0, hair: true }, { fade: 0.6, fingers: 'down', slide: t => ({ el: 0.55 + 0.3 * Math.sin(t * 0.9), lift: 0.004 }) });
       look(a, b); look(b, a); expr(a, 'smile'); expr(b, 'smile');
       break;
     }
@@ -356,8 +471,9 @@ function setup(ctx, p, smooth) {
       };
       follow();
       clip(a, 'ride_scooter'); clip(b, 'ride_passenger');
-      b.setHandTarget('L', side(a, 'spine', 0.02, 1, 0.1, 0.08), { fade: 0.5 });
-      b.setHandTarget('R', side(a, 'spine', 0.02, -1, 0.1, 0.08), { fade: 0.5 });
+      // her arms around his waist, palms on his belly
+      b.touch('L', a, 'torso', { u: 0.22, a: 0.55 }, { fade: 0.5 });
+      b.touch('R', a, 'torso', { u: 0.22, a: -0.55 }, { fade: 0.5 });
       look(a, null); look(b, null); expr(a, 'grin'); expr(b, 'smile');
       if (ctx.player?.human === a && ctx.player.vehicle && v === ctx.player.vehicle) {
         // the player keeps driving: only the passenger follows the pillion
@@ -378,29 +494,7 @@ function setup(ctx, p, smooth) {
   }
 }
 
-/**
- * Hand target behind a partner's bone (around the back): bone + the partner's back direction × depth +
- * the hugger's own left/right × spread (k = +1 left hand, −1 right hand), dy up.
- */
-function behind(partner, bone, dy, depth, hugger, k, spread = 0.09) {
-  return (out) => {
-    partner.bonePos(bone, out); out.y += dy * partner.look.height;
-    fwdDir(partner, _w); out.addScaledVector(_w, -depth * partner.look.height);
-    leftDir(hugger, _w); out.addScaledVector(_w, k * spread);
-    return out;
-  };
-}
-/** Hand target on a partner's side (waist): bone + partner's left × k × spread, slightly forward. */
-function side(partner, bone, dy, k, spread, fwd = 0.0) {
-  return (out) => {
-    partner.bonePos(bone, out); out.y += dy * partner.look.height;
-    leftDir(partner, _w); out.addScaledVector(_w, k * spread * partner.look.height);
-    if (fwd) { fwdDir(partner, _w); out.addScaledVector(_w, fwd); }
-    return out;
-  };
-}
-
-/** Soft quilted blanket draped over two bodies lying side by side (local +z = toward the heads). */
+/** Soft quilted blanket draped over two bodies lying side by side (local +z = toward the heads). Opaque. */
 function buildBlanket(ctx, { w = 1.5, l = 1.65, bodies = [-0.3, 0.3] } = {}) {
   const nx = 26, nz = 22;
   const g = new THREE.PlaneGeometry(w + 0.5, l, nx, nz);

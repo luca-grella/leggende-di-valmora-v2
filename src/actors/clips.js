@@ -93,16 +93,16 @@ add('idle_stretch', {
 // =============================================================================== locomotion (phase 0 = left heel strike)
 // Duration 1.0 = one full cycle; the Animator phase-locks the cycle to the distance travelled.
 const WALK = {
-  contact: { pos: [0, -0.012, 0], hips: [0, -7, 2], spine: [3, 0, -1], chest: [-3, 10, 0], head: [-3, -4, 1],
+  contact: { pos: [0.008, -0.012, 0], hips: [0, -7, 2], spine: [3, 0, -1], chest: [-3, 10, 0], head: [-3, -4, 1],
     thL: [-27, 0, 1.5], knL: [5, 0, 0], ftL: [-14, 0, 0], thR: [17, 0, -1.5], knR: [20, 0, 0], ftR: [20, 0, 0],
     uaL: [20, 0, -34], faL: [-12, 0, 0], uaR: [-22, 0, 34], faR: [-30, 0, 0], hL: [6, 0, 0], hR: [-6, 0, 0] },
-  down: { pos: [0, -0.036, 0], hips: [0, -5, 4], spine: [4, 0, -2], chest: [-3, 7, 0], head: [-2, -3, 1],
+  down: { pos: [0.016, -0.036, 0], hips: [0, -5, 4], spine: [4, 0, -2], chest: [-3, 7, 0], head: [-2, -3, 1],
     thL: [-21, 0, 1.5], knL: [17, 0, 0], ftL: [0, 0, 0], thR: [13, 0, -1.5], knR: [40, 0, 0], ftR: [22, 0, 0],
     uaL: [15, 0, -34], faL: [-13, 0, 0], uaR: [-17, 0, 34], faR: [-27, 0, 0] },
-  pass: { pos: [0, 0.006, 0], hips: [0, 0, 4], spine: [3, 0, -2], chest: [-3, 0, 0], head: [-3, 0, 1],
+  pass: { pos: [0.019, 0.006, 0], hips: [0, 0, 4], spine: [3, 0, -2], chest: [-3, 0, 0], head: [-3, 0, 1],
     thL: [-2, 0, 1.5], knL: [6, 0, 0], ftL: [0, 0, 0], thR: [-20, 0, -1.5], knR: [62, 0, 0], ftR: [10, 0, 0],
     uaL: [3, 0, -34], faL: [-15, 0, 0], uaR: [-3, 0, 34], faR: [-19, 0, 0], hL: [0, 0, 0], hR: [0, 0, 0] },
-  up: { pos: [0, 0.026, 0], hips: [0, 5, 2], spine: [3, 0, -1], chest: [-3, -8, 0], head: [-3, 3, 1],
+  up: { pos: [0.012, 0.026, 0], hips: [0, 5, 2], spine: [3, 0, -1], chest: [-3, -8, 0], head: [-3, 3, 1],
     thL: [14, 0, 1.5], knL: [8, 0, 0], ftL: [14, 0, 0], thR: [-29, 0, -1.5], knR: [32, 0, 0], ftR: [-6, 0, 0],
     uaL: [-15, 0, -34], faL: [-27, 0, 0], uaR: [15, 0, 34], faR: [-12, 0, 0], hL: [-4, 0, 0], hR: [4, 0, 0] },
 };
@@ -336,6 +336,67 @@ add('kneel_bow', {
   keys: [[0, { ...KNEEL, pos: [0, -0.56, -0.06], thL: [-26, 0, 6], thR: [-26, 0, -6], knL: [118, 0, 0], knR: [118, 0, 0], spine: [34, 0, 0], chest: [12, 0, 0], head: [-6, 0, 0],
     uaL: [-48, 0, -24], faL: [-30, 0, 0], uaR: [-48, 0, 24], faR: [-30, 0, 0] }]],
   osc: { spine: { x: [2, 1, 0] }, chest: { y: [2, 1, 0.5] } },
+});
+
+/** Kneeling sitting back on the heels (thighs forward, a lap a foot can rest on). */
+const KNEEL_SIT = {
+  pos: [0, -0.62, -0.06], hips: [0, 0, 0], spine: [8, 0, 0], chest: [2, 0, 0], head: [-6, 0, 0],
+  thL: [-72, 0, 7], thR: [-72, 0, -7], knL: [146, 0, 0], knR: [146, 0, 0], ftL: [44, 0, 0], ftR: [44, 0, 0],
+  uaL: [-26, 0, -22], faL: [-46, 0, 0], hL: [10, 0, 0], uaR: [-26, 0, 22], faR: [-46, 0, 0], hR: [10, 0, 0],
+};
+export const KNEEL_SIT_POSE = KNEEL_SIT;
+add('kneel_sit', {
+  duration: 5, loop: true, meta: { footIK: 0, sit: 1, look: 1 },
+  keys: [[0, KNEEL_SIT]],
+  osc: { spine: { x: [1.5, 1, 0] }, head: { y: [4, 1, 0.2] }, chest: { y: [2, 1, 0.5] } },
+});
+/** Kneeling on the heels, bowing forward from the hips with both arms reaching low (massage on the floor, feet). */
+add('kneel_reach', {
+  duration: 4, loop: true, meta: { footIK: 0, sit: 1, look: 0.6 },
+  keys: [[0, { ...KNEEL_SIT, hips: [30, 0, 0], thL: [-100, 0, 8], thR: [-100, 0, -8], spine: [20, 0, 0], chest: [10, 0, 0], neck: [-6, 0, 0], head: [-20, 0, 0],
+    uaL: [-62, 0, -16], faL: [-26, 0, 0], hL: [10, 0, 0], uaR: [-62, 0, 16], faR: [-26, 0, 0], hR: [10, 0, 0] }]],
+  osc: { spine: { x: [2, 1, 0] }, chest: { y: [2, 1, 0.5] } },
+});
+
+/** Going down on both knees (one knee first, hands steadying on the thigh); continues into 'kneel'. */
+add('kneel_down', {
+  duration: 1.25, next: 'kneel', meta: { footIK: 0, sit: 1, look: 0.4 },
+  keys: [
+    [0, {}],
+    [0.4, { pos: [0, -0.2, 0.04], spine: [14, 0, 0], head: [-6, 0, 0], thR: [-58, 0, -4], knR: [66, 0, 0], ftR: [-6, 0, 0], thL: [6, 0, 5], knL: [52, 0, 0], ftL: [30, 0, 0],
+      uaR: [-24, 0, 20], faR: [-52, 0, 0], uaL: [-10, 0, -28], faL: [-30, 0, 0] }],
+    [0.8, { pos: [0, -0.42, 0.0], thR: [-50, 0, -4], knR: [90, 0, 0], thL: [-8, 0, 5], knL: [100, 0, 0], ftL: [66, 0, 0], spine: [10, 0, 0] }, 'inOut'],
+    [1.25, KNEEL],
+  ],
+});
+
+// =============================================================================== outfit (romance: down to the underwear, never less)
+/** Top off over the head: crossed hands at the hem, pulled up over the head ('swap' = the garment covers the head). Also used to put it back on. */
+add('undress_top', {
+  duration: 2.3, meta: { look: 0, footIK: 1 },
+  keys: [
+    [0, {}],
+    [0.4, { spine: [8, 0, 0], chest: [4, 0, 0], head: [8, 0, 0], uaL: [-26, 0, -4], faL: [-82, 0, 0], hL: [0, -30, 0], uaR: [-26, 0, 4], faR: [-82, 0, 0], hR: [0, 30, 0] }],
+    [0.95, { spine: [-2, 0, 0], chest: [-6, 0, 0], head: [16, 0, 0], uaL: [-150, 0, 6], faL: [-70, 0, 0], hL: [-10, 0, 0], uaR: [-150, 0, -6], faR: [-70, 0, 0], hR: [-10, 0, 0], eyes: 0.2 }, 'inOut'],
+    [1.2, { uaL: [-168, 0, 16], faL: [-36, 0, 0], uaR: [-168, 0, -16], faR: [-36, 0, 0], head: [6, 0, 0], eyes: 1 }],
+    [1.65, { uaR: [-70, 0, 64], faR: [-20, 0, 0], hR: [10, 0, 0], uaL: [-20, 0, -30], faL: [-30, 0, 0], chest: [-2, -10, 0], head: [-4, -12, 0], mouth: 0.2 }, 'out'],
+    [2.3, { ...STAND }],
+  ],
+  events: [{ t: 1.12, name: 'swap' }],
+});
+/** Bottoms off: thumbs at the waist, bend and push down, step out of them one foot at a time ('swap' at the knees). */
+add('undress_bottom', {
+  duration: 2.5, meta: { look: 0, footIK: 0.6 },
+  keys: [
+    [0, {}],
+    [0.4, { uaL: [-6, 0, -12], faL: [-34, 0, 0], hL: [0, 0, -20], uaR: [-6, 0, 12], faR: [-34, 0, 0], hR: [0, 0, 20], head: [8, 0, 0] }],
+    [1.05, { pos: [0, -0.1, -0.04], spine: [38, 0, 0], chest: [12, 0, 0], head: [6, 0, 0], thL: [-18, 0, 2], thR: [-18, 0, -2], knL: [30, 0, 0], knR: [30, 0, 0], ftL: [-8, 0, 0], ftR: [-8, 0, 0],
+      uaL: [-56, 0, -10], faL: [-12, 0, 0], uaR: [-56, 0, 10], faR: [-12, 0, 0] }, 'inOut'],
+    [1.55, { pos: [0, -0.03, -0.02], spine: [16, 0, 0], thL: [-34, 0, 4], knL: [62, 0, 0], ftL: [10, 0, 0], thR: [0, 0, -2], knR: [6, 0, 0], ftR: [0, 0, 0], uaL: [-20, 0, -34], faL: [-30, 0, 0], uaR: [-20, 0, 34], faR: [-30, 0, 0] }],
+    [1.95, { thL: [0, 0, 2], knL: [4, 0, 0], ftL: [0, 0, 0], thR: [-34, 0, -4], knR: [62, 0, 0], ftR: [10, 0, 0], spine: [10, 0, 0] }],
+    [2.5, { ...STAND }],
+  ],
+  events: [{ t: 1.1, name: 'swap' }],
 });
 
 /** Lying on the back, the body pivots around the hips; head toward −z. */

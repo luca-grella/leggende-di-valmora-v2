@@ -387,12 +387,84 @@ actors.looks (LOOKS presets), actors.randomLook(seed, {sex, age}), actors.clips 
 point laugh surprised cheer defeat think sit_down sit_idle stand_up sit_ground kneel lie_back
 pickup carry_idle carry_walk throw throw_ball search ride_scooter swim sleep`.
 **Expressions**: `neutral smile grin laugh blush shy surprised sad angry wink closed kiss sleepy smug`.
-**Pair kinds** (a = player, b = woman; both stay clothed; loops are gentle): `face walk_together
+**Pair kinds** (a = player, b = woman; clothes as set by the caller — at most underwear, see Outfits;
+loops are gentle): `face walk_together
 sit_bench sit_table sit_ground hug kiss stroke_hair massage_shoulders massage_back massage_legs
 massage_feet kiss_feet kiss_neck ear_nibble whisper guide lie_blanket picnic_lap scooter_ride swim`.
-`lie_blanket` adds a blanket covering both from the shoulders down (only heads/shoulders visible).
-`massage_feet` / `kiss_feet` are staged as medium shots (she sits on the bed/sofa, he kneels);
-no foot detail.
+`lie_blanket` adds an opaque blanket covering both from the shoulders down (only heads/shoulders visible).
+`massage_feet` / `kiss_feet` are medium shots: she sits on the bed/sofa edge; massage: her right foot
+rests on his lap (he kneels back on his heels) and both palms knead it; kiss: she raises the foot in
+front of his face, his hands cradle heel and ankle, the kisses travel by themselves between instep,
+toes and ankle (no menu, no close-up). Every kind uses real contact (see Body physicality).
+
+### Body physicality (actors) — `src/actors/contact.js`, `bodies.js`, `human-api.js`
+Coordinated bodies: nothing slides, floats, overlaps or sinks; hands, feet and mouths land ON surfaces.
+- **Locomotion**: walk/run cycles with arm–leg opposition, pelvis weight shift over the stance foot,
+  counter-rotating chest, lean into turns/acceleration. Stride measured on each body
+  (`calibrateLoco`, per proportions) so the cycle is phase-locked to the distance actually travelled.
+  **Feet planted** (`FootPlanter`, every human within 24 m of the camera): during the stance the foot is
+  locked where it landed (flat, ankle at rest height, tilted to the slope for the player); standing
+  still both feet stay put and step one at a time (arc) when the body turns (`face()`) or drifts; hips
+  drop when a leg can't reach. Autopilot (`moveTo`) eases in/out (~5 m/s² start) and turns smoothly.
+- **Collisions** (`actors.bodies`, loop order actors+0.6, replaces the old game.js pass): every visible
+  human (player, NPCs, trainers, scene extras) is a capsule of radius `human.radius` (shoulders+arms,
+  ≈0.2–0.25 m adults). Overlaps are pushed apart through `world.resolveMove` (never into walls,
+  furniture, trees, props): walkers give way to standers, two walkers share, seated/kneeling/lying
+  people never move. `moveTo` walkers steer around people ahead. World colliders are resolved by
+  movers (radius ≥ 0.28). Pair-staged humans are skipped (pairs.js solves their contact).
+  `human.collide = false` opts out. `actors.findFree(x, z, r, {except, maxDist, people})` → free spot
+  (no collider, nobody there); stagePair moves standing kinds there, endPair puts both back on free ground.
+- **Support** (body rests on a surface): clips declare a support (`seat` sit_*, `floor` sit_ground/legs/
+  knees, `knees` kneel*, `lie` lie_back/sleep); every frame the lowest point of the support spheres
+  (buttocks+thighs / knees+toes / back+head) is put exactly on the surface: seat = `support.seatY`
+  (default origin+0.45), floor = `support.floorY` (default origin), mattress = `support.lieY`. Seated
+  feet are IK'd flat onto the floor whatever the seat height. Transitions (sit_down, stand_up,
+  kneel_down) can only push up (never through the seat).
+
+**Human — physicality API** (all optional, additive to the contract above):
+```
+human.radius                              body collision radius (m);  human.collide (bool);  human.planting (bool)
+human.surface(region, params?, outP?, outN?) → Vector3   point ON the body surface (world) + outward normal
+human.setHandTarget(side 'L'|'R', target|null, {weight=1, fade=0.35, fingers, elbow, normal, press=0.004, offset})
+human.touch(side, other, region, params?, {fade, slide: t => params, fingers, elbow, press, offset})   palm ON a body
+human.reach(side, target, opts)           alias of setHandTarget
+human.setFootTarget(side, target|null, {weight, fade, normal})   sole of the foot on a point / a body region
+human.mouthTo(target|null, {weight, fade, offset=0.006})          lips to a point / region (spine→head CCD)
+human.lookAt(target|null, {weight})       head look-at (exists; the mouth reach overrides it while active)
+human.reachError {L, R, mouth} (m) · human.reachVec {L, R, mouth, footL, footR} (wanted − achieved, world)
+human.setSupport({seatY, floorY, lieY} | null)
+human.sitOn({x, z, y: seat top, facing}, {walk=true, run, floorY, clip='sit_idle'|'sit_feet'}) → Promise   walks, turns, sits back onto it
+human.kneelAt({x, z, facing}, {walk=true, bow=false, floorY}) → Promise    (kneel_down → kneel)
+human.sitGround({x, z, facing}, {walk=true, clip='sit_ground'|'sit_legs'|'sit_knees'}) → Promise
+human.lieOn({x, z, y: surface top, facing: toward the head}, {clip='lie_back'})   instant (use a fade)
+human.standUp() → Promise                 off a seat (glides forward) or up from the floor
+human.grounded                            seated / kneeling / lying / riding
+human.setOutfit('clothes'|'underwear'|'top'|look, {color})   instant outfit swap (geometry only)
+human.undress({animate=true, color}) → Promise · human.dress({animate}) → Promise · human.prepareOutfit('underwear')
+human.outfit ('clothes'|'top'|'underwear'|'custom') · human.baseLook (the clothes)
+```
+Targets: a **contact** `{human, region, params?, slide?: t → params, offset?}` (re-evaluated every frame:
+the palm lies flat on the surface, fingers along the reach direction or `fingers`, elbow out/down or
+`elbow`), a `Vector3`, an `Object3D`, or `fn(out, t) → Vector3` (add `normal` to lay the palm flat on a
+table, a wall…). `slide(t)` may return `{u, a, el, az, lift (m off the surface), region}` to stroke,
+knead or travel across regions. **Regions**: `torso {u 0 hips..1 shoulders, a 0 front/π back/+π/2 its
+left}`, `neck {u, a}`, `head {el, az, hair}`, `shoulder_L/R {u 0 neck..1 deltoid}`, `thigh_* shin_*
+upperarm_* forearm_* {u along, a around (0 front)}`, `foot_L/R {u 0 ankle..0.5 instep..1 toes, sole}`,
+`palm_L/R`; presets `back upper_back lower_back chest belly waist_L/R side_L/R neck_L/R nape throat mouth
+lips cheek_L/R ear_L/R forehead crown hair hair_L/R knee_L/R lap_L/R calf_L/R instep_L/R toes_L/R
+ankle_L/R sole_L/R hand_L/R` (list: `actors.SURFACE_REGIONS`). Extra params override a preset's.
+**Pair contact solver** (pairs.js): after placing both, the mover's spacing is adjusted every frame along
+the anchor axis from signed errors: chests meet in a hug (slight press), lips meet halfway in a kiss,
+the masseur moves until both palms rest on her, the kneeling partner until mouth/hands reach the foot;
+head/torso overlap pushes apart (bounded ±0.2–0.4 m). New clips: `kneel_down kneel_sit kneel_reach
+undress_top undress_bottom` (+ `kneel_bow`).
+
+**Outfits** (romance only, agreed with Luca: down to the underwear, never nudity): `setLook` with the
+same sex/age/build, `setOutfit` and `undress/dress` swap only the skinned geometry (`buildHumanGeometry`),
+so the pose, clip, IK and expression carry on. `undress()`: top pulled over the head (swap at the moment
+it covers the head: 'top' = bra/bare chest + bottoms still on; dresses, swimsuits and coats go straight
+to the full set), then bottoms pushed down and stepped out of (swap → 'underwear': bra + briefs / briefs,
+barefoot). Underwear is never removed by the actors API.
 
 **Npc**: `id`, `name`, `human`, `object`, `setTalk(fn)`, `setLabel(text)`, `setMarker(icon|null)`,
 `setWander(cfg|null)`, `goTo(poiId|{x,z}, {run}) → Promise`, `faceTo(obj|{x,z})`, `freeze(bool)`
@@ -407,7 +479,8 @@ clips), `held` (current carried object), `throwHeld(dir?) → Promise<obj>`, `th
 (throw_ball clip, resolves at release time), `mount(vehicle|null)` (vehicle `{object, seat:
 Object3D, maxSpeed=11, accel=8, turnRate=2.8, kind:'scooter'}`), `look` (save.state.player.look).
 Movement: walk 2.6 m/s (half stick), run 5.6 m/s, acceleration ~10 m/s², eased turning
-(~0.12 s), smooth idle↔walk↔run blend by speed, feet on `world.groundY`, `world.resolveMove`.
+(~0.12 s), smooth idle↔walk↔run blend by speed (stride calibrated on the body, feet planted),
+feet on `world.groundY` (slope-aligned), `world.resolveMove`, body collisions (`actors.bodies`).
 Writes `save.state.player {x, z, facing, area, interior}` on `save.commit()`.
 
 ## Creatures & Battle API — creatures

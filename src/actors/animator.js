@@ -73,6 +73,8 @@ export class Animator {
     this.base = null;   // {name, opts, resolve, ended, prevT}
     this.over = null;   // upper override
     this.speed = 0; this.phase = 0; this.locoW = { idle: 1, walk: 0, run: 0 };
+    /** per-body strides (m per cycle) measured on the skeleton (contact.calibrateLoco); null = LOCO defaults */
+    this.stride = null;
     this.meta = { footIK: 1, look: 1, breathe: 1, lean: 1, sit: 0 };
     this.scalars = { mouth: 0, eyes: 1, brow: 0 };
     /** (eventName, clipName, eventData) → void */
@@ -149,8 +151,9 @@ export class Animator {
     const s = this.speed;
     const move = sstep(0.05, 0.85, s), fast = sstep(LOCO.walk.speed + 0.5, LOCO.run.speed - 0.4, s);
     this.locoW.idle = 1 - move; this.locoW.walk = move * (1 - fast); this.locoW.run = move * fast;
-    const walkStride = LOCO.walk.minStride + (LOCO.walk.stride - LOCO.walk.minStride) * sstep(0.3, LOCO.walk.speed, s);
-    const stride = walkStride + (LOCO.run.stride - walkStride) * fast;
+    const sw = this.stride?.walk ?? LOCO.walk.stride, sr = this.stride?.run ?? LOCO.run.stride, smin = sw * 0.78;
+    const walkStride = smin + (sw - smin) * sstep(0.3, LOCO.walk.speed, s);
+    const stride = walkStride + (sr - walkStride) * fast;
     const prevPhase = this.phase;
     this.phase = (this.phase + (s / stride) * dt) % 1;
     if (this.base?.name === 'locomotion' && move > 0.3 && s > 0.2) {
