@@ -10,7 +10,7 @@ import { buildSphere } from '../creatures/sphere.js';
 import { buildArena } from './arena.js';
 import { computeDamage } from './damage.js';
 import { chooseMove } from './ai.js';
-import { throwBall } from './capture.js';
+import { throwBall, playerThrow } from './capture.js';
 import { playEvolution } from './evolution.js';
 import { wait, tween } from './util.js';
 
@@ -63,10 +63,44 @@ export class BattleRun {
     await wait(this.ctx, Math.min(2.2, 0.5 + text.length * 0.018) * (this.fast ? 0.25 : 1));
   }
   cam(kind, extra = null) {
+    const ctx = this.ctx;
     const a = this.allyModel?.object?.visible ? this.allyModel.object : this.allyAnchor;
     const f = this.foeModel?.object?.visible ? this.foeModel.object : this.foeAnchor;
-    try { return this.ctx.cameraRig?.closeUp?.(kind, extra || { ally: a, foe: f }) || Promise.resolve(); }
-    catch (e) { console.warn('[battle] camera', e); return Promise.resolve(); }
+    try {
+      // portrait phones: the rig's side-on framings get too wide, so frame along the battle axis (Sun/Moon style:
+      // the ally big at the bottom, the foe in the upper middle)
+      if (!extra && (kind === 'battle_wide' || kind === 'battle_intro' || kind === 'battle_ally')) {
+        const spec = this.axisShot(kind);
+        if (spec) return ctx.cameraRig.shot(spec, { dur: kind === 'battle_intro' ? 2.0 : kind === 'battle_ally' ? 0.7 : 0.9, ease: 'smooth', drift: 0.04 });
+      }
+      return ctx.cameraRig?.closeUp?.(kind, extra || { ally: a, foe: f }) || Promise.resolve();
+    } catch (e) { console.warn('[battle] camera', e); return Promise.resolve(); }
+  }
+  /** Sun/Moon framings along the battle axis: the ally from behind (bottom), the foe facing us (upper middle). */
+  axisShot(kind) {
+    const A = this.arena; if (!A) return null;
+    const portrait = (this.ctx.viewport?.aspect ?? (innerWidth / innerHeight)) < 0.9;
+    const S = A.slots, fw = A.forward, rt = A.right;
+    const ha = this.allyModel?.height ?? 0.9, hf = this.foeModel?.height ?? 0.9;
+    const ally = new THREE.Vector3(S.ally.x, S.ally.y, S.ally.z), foe = new THREE.Vector3(S.foe.x, S.foe.y, S.foe.z);
+    const big = Math.max(ha, hf);
+    if (kind === 'battle_ally') {
+      const pos = ally.clone().addScaledVector(fw, -2.4 - ha * 0.7).addScaledVector(rt, (portrait ? 0.65 : 1.1) + ha * 0.25); pos.y += ha + 0.75;
+      const tgt = ally.clone().lerp(foe, 0.72); tgt.y += hf * 0.55;
+      return { position: pos, target: tgt, fov: portrait ? 40 : 34 };
+    }
+    const pos = portrait
+      ? ally.clone().addScaledVector(fw, -4.0 - big * 1.2).addScaledVector(rt, 1.0).setY(ally.y + 2.0 + big * 1.0)
+      : ally.clone().addScaledVector(fw, -2.3 - big * 0.7).addScaledVector(rt, 1.7 + big * 0.3).setY(ally.y + 1.15 + big * 0.6);
+    const tgt = ally.clone().lerp(foe, portrait ? 0.56 : 0.5); tgt.y += big * (portrait ? 0.3 : 0.4);
+    if (!portrait) tgt.addScaledVector(rt, -0.25);
+    const spec = { position: pos, target: tgt, fov: portrait ? 42 : 40 };
+    if (kind === 'battle_intro') {
+      const fpos = foe.clone().addScaledVector(fw, -(1.6 + hf * 1.2)).addScaledVector(rt, 0.4); fpos.y += hf * 0.6 + 0.2;
+      const ftgt = foe.clone(); ftgt.y += hf * 0.55;
+      spec.from = { position: fpos, target: ftgt, fov: 34 };
+    }
+    return spec;
   }
   hudUpdate(o) { try { this.hud?.update?.(o); } catch (e) { console.warn('[battle] hud', e); } }
   aliveFoes() { return this.foes.filter(m => m.hp > 0); }
@@ -111,12 +145,15 @@ export class BattleRun {
     // ---- intro ----
     if (this.isTrainer) {
       this.foeModel.object.visible = false;
-      ctx.cameraRig?.closeUp?.('battle_intro', { ally: this.allyAnchor, foe: this.trainerObj || this.foeAnchor }, { dur: 0, ease: 'cut' });
+      if (this.trainerObj) ctx.cameraRig?.closeUp?.('portrait', { target: this.trainerHuman?.head ? this.trainerHuman : this.trainerObj }, { dur: 0, ease: 'cut' });
+      else ctx.cameraRig?.closeUp?.('battle_intro', { ally: this.allyAnchor, foe: this.foeAnchor }, { dur: 0, ease: 'cut' });
       await ctx.fade?.in?.(320);
       this.trainerHuman?.play?.('wave', { loop: false });
+      this.trainerHuman?.setExpression?.('grin');
       await this.say(this.trainer?.name ? `${this.trainer.name} ti sfida!` : 'Ti hanno sfidato!');
+      const said = this.say(`${this.trainer?.name || 'L\'avversario'} manda in campo ${nameOf(this.foe)}!`, { wait: false });
       await this.sendOut('foe', this.foe);
-      await this.say(`${this.trainer?.name || 'L\'avversario'} manda in campo ${nameOf(this.foe)}!`, { wait: false });
+      await said;
     } else {
       // the wild Velmon pops out of the grass
       this.foeModel.object.visible = true;
@@ -130,8 +167,9 @@ export class BattleRun {
       await this.say(this.kind === 'legendary' ? `${nameOf(this.foe)} ti sbarra la strada!` : `Un ${nameOf(this.foe)} selvatico è apparso!`);
     }
     this.ally = ally0;
-    await this.say(`Vai, ${nameOf(this.ally)}!`, { wait: false });
+    const go = this.say(`Vai, ${nameOf(this.ally)}!`, { wait: false });
     await this.sendOut('ally', this.ally);
+    await go;
     this.cam('battle_wide');
 
     // ---- turns ----
@@ -160,9 +198,19 @@ export class BattleRun {
       const t = tnpc.object.position;
       if (Math.hypot(t.x - px, t.z - pz) > 0.5) facing = Math.atan2(t.x - px, t.z - pz);
     }
-    const at = this.at ? { x: this.at.x, z: this.at.z, facing } : { x: px, z: pz, facing };
+    let at = this.at ? { x: this.at.x, z: this.at.z, facing } : { x: px, z: pz, facing };
     const zone = ctx.world?.encounterZoneAt?.(px, pz);
-    const grass = this.kind === 'wild' && (ctx.world ? !!zone && !String(zone).startsWith('grotta') : true);
+    const inCave = String(zone || ctx.world?.area || '').startsWith('grotta');
+    const grass = this.kind === 'wild' && (ctx.world ? !!zone && !inCave : true);
+    // the battle happens on the spot, but the World's tall grass would bury the Velmon and the cameras: World may
+    // press it flat (world.flattenGrass, optional); otherwise the arena slides to the nearest clear ground
+    this.flattened = false;
+    if (ctx.world && !this.at && !inCave) {
+      if (ctx.world.flattenGrass) {
+        try { ctx.world.flattenGrass({ x: px + Math.sin(facing) * 2.9, z: pz + Math.cos(facing) * 2.9, r: 6.5 }); this.flattened = true; } catch (e) { console.warn('[battle] flattenGrass', e); }
+      }
+      if (!this.flattened) at = this.clearSpot(at) || at;
+    }
     this.arena = buildArena(ctx, at, { grass });
     const S = this.arena.slots;
 
@@ -211,6 +259,34 @@ export class BattleRun {
     this.trainerHuman?.lookAt?.(this.allyAnchor);
   }
 
+  /** Nearest arena placement (centre + facing) whose slots and camera side are free of tall grass and walkable. */
+  clearSpot(at) {
+    const W = this.ctx.world;
+    const bad = (x, z) => {
+      const zn = W.encounterZoneAt?.(x, z);
+      if (zn && !String(zn).startsWith('grotta')) return true;
+      if (W.isWater?.(x, z)) return true;
+      if (W.walkable && W.walkable(x, z) === false) return true;
+      return false;
+    };
+    const ok = (x, z, f) => {
+      const fx = Math.sin(f), fz = Math.cos(f), rx = -fz, rz = fx;
+      // local points: [along forward, along right] — player, ally, mid, foe, trainer, camera side
+      const pts = [[0, 0], [0.9, 0], [3, 0], [5.1, 0], [6.8, -0.85], [-1.6, 1.7], [-0.6, -0.95], [3, 2.2], [3, -2.2], [5.1, 1.2], [5.1, -1.2]];
+      return pts.every(([a, b]) => !bad(x + fx * a + rx * b, z + fz * a + rz * b));
+    };
+    const fs = [at.facing, at.facing + Math.PI / 2, at.facing - Math.PI / 2, at.facing + Math.PI];
+    if (ok(at.x, at.z, at.facing)) return null;
+    for (let r = 2; r <= 22; r += 2) {
+      for (let i = 0; i < 16; i++) {
+        const a = (i / 16) * Math.PI * 2;
+        const x = at.x + Math.cos(a) * r, z = at.z + Math.sin(a) * r;
+        for (const f of fs) if (ok(x, z, f)) return { x, z, facing: f };
+      }
+    }
+    return null;
+  }
+
   makeModel(side, mon) {
     const ctx = this.ctx, s = this.arena.slots[side];
     const m = buildVelmon(ctx, mon.species);
@@ -236,6 +312,7 @@ export class BattleRun {
     this.caughtBall?.dispose?.();
     this.arena?.dispose();
     this.fx.clear?.();
+    if (this.flattened) { try { ctx.world?.flattenGrass?.(null); } catch { /* optional */ } }
     const pl = ctx.player, pobj = this.playerObj, sp = this.savedPlayer;
     if (pobj && sp) {
       if (pl?.teleport && !pl.placeholder) pl.teleport(sp.x, sp.z, Number.isFinite(sp.facing) ? sp.facing : sp.ry);
@@ -280,13 +357,16 @@ export class BattleRun {
     const human = side === 'ally' ? this.playerHuman : this.trainerHuman;
     const ball = buildSphere(ctx, 'sfera');
     ctx.scene.add(ball.object);
-    const from = new THREE.Vector3();
-    if (thrower) { thrower.getWorldPosition(from); from.y += 1.3; } else from.set(S.x, S.y + 1.2, S.z).addScaledVector(this.arena.forward, side === 'ally' ? -1.5 : 1.5);
+    let from = new THREE.Vector3();
     const to = new THREE.Vector3(S.x, S.y + 0.55, S.z);
     this.cam(side === 'ally' ? 'battle_wide' : 'battle_foe');
-    human?.play?.('throw_ball', { loop: false, fade: 0.15 });
-    this.phase = 'sendOut:wait ' + side;
-    await wait(ctx, human ? 0.38 : 0.1);
+    this.phase = 'sendOut:throw ' + side;
+    if (side === 'ally') from = await playerThrow(ctx, this, ball);
+    else {
+      if (thrower) { thrower.getWorldPosition(from); from.y += 1.3; } else from.set(S.x, S.y + 1.2, S.z).addScaledVector(this.arena.forward, 1.5);
+      human?.play?.('throw_ball', { loop: false, fade: 0.15 });
+      await wait(ctx, human ? 0.38 : 0.1);
+    }
     this.phase = 'sendOut:arc ' + side;
     ctx.audio?.sfx?.('ball_throw', { vol: 0.7 });
     ball.play('throw');
@@ -546,6 +626,7 @@ export class BattleRun {
   async giveXp(foe) {
     const ally = this.ally;
     if (!ally || ally.hp <= 0) return;
+    this.cam('battle_wide');
     const xp = Math.max(1, Math.floor(((SPECIES[foe.species]?.xp ?? 50) * foe.level / 7) * (this.isTrainer ? 1.5 : 1)));
     const events = gainXp(ally, xp, { autoLearn: false });
     this.hudUpdate({ ally });

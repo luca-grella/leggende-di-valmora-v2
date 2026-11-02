@@ -1,4 +1,4 @@
-// Cheats (ui area): triple tap (within 600 ms) on the coin counter → cheat:money, on the team strip →
+// Cheats (ui area): triple tap (within 800 ms) on the coin counter → cheat:money, on the team strip →
 // cheat:level. Keyboard Shift+M / Shift+L are emitted by core input. Story pays the coins (and toasts);
 // the level-up is handled by whoever listens to cheat:level (creatures / integration).
 export function wireCheats(ctx, hud) {
@@ -7,7 +7,7 @@ export function wireCheats(ctx, hud) {
     let n = 0, t0 = 0;
     elm.addEventListener('pointerdown', () => {
       const now = performance.now();
-      if (now - t0 > 600) n = 0;
+      if (now - t0 > 800) n = 0;
       if (n === 0) t0 = now;
       if (++n === 3) {
         n = 0;

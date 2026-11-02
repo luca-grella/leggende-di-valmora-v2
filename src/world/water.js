@@ -59,8 +59,8 @@ void main(){
   float caus = smoothstep(0.9, 0.97, 1.0 - abs(c1 - c2) * 3.0);
   col += caus * 0.08 * (1.0 - smoothstep(0.4, 2.2, depth)) * (1.0 - uNight);
   // sparkles on wave crests
-  float sp = smoothstep(0.82, 0.9, vnoise(p * 1.1 + t * 0.35) * 0.6 + (vWave * 0.5 + 0.5) * 0.5);
-  col += uSparkle * sp * 0.35 * smoothstep(1.2, 3.0, depth);
+  float sp = smoothstep(0.9, 0.95, vnoise(p * 2.4 + vec2(t * 0.6, -t * 0.4)) * 0.75 + (vWave * 0.5 + 0.5) * 0.3);
+  col += uSparkle * sp * 0.3 * smoothstep(1.2, 3.0, depth);
   // shore foam: contact line + two rings rolling in
   float br = vnoise(p * 0.45 + vec2(t * 0.08, -t * 0.05));
   float contact = 1.0 - smoothstep(0.03, 0.08 + br * 0.06, depth);

@@ -351,8 +351,10 @@ export function wireChapters(ctx) {
       if (ctx.world?.enterInterior && !(ctx.world.interior === 'home.player')) {
         const off = ctx.bus.on('interior:enter', ({ id } = {}) => {
           if (id !== 'home.player' || !bed) return;
-          const f = bed.facing || 0;
-          teleportPlayer(bed.x + Math.cos(f) * 1.1, bed.z - Math.sin(f) * 1.1, f + Math.PI / 2);
+          // beside the bed, on the room side (towards the door), facing into the room
+          const d = K.poi('home.player.door') || { x: bed.x, z: bed.z + 3 };
+          const dx = d.x - bed.x, dz = d.z - bed.z, l = Math.hypot(dx, dz) || 1;
+          teleportPlayer(bed.x + (dx / l) * 1.5, bed.z + (dz / l) * 1.5, Math.atan2(dx, dz));
         });
         try { await ctx.world.enterInterior('home.player'); } catch (e) { console.warn('[story] intro enterInterior', e); }
         off?.();
@@ -366,16 +368,21 @@ export function wireChapters(ctx) {
     await K.narrate(['Ti svegli nella tua cameretta a Borgo Alba. Dalla finestra entra il profumo del mare.', 'Oggi è un giorno speciale... ma non ricordi bene perché.']);
     try { ctx.player?.human?.setExpression?.('neutral'); } catch { /* optional */ }
     const mum = R.get('story.mamma');
-    if (mum) {
-      const pp = K.playerPos();
-      if (pp) {
-        const o = mum.object.position, d = dist2(o, pp);
-        if (d > 1.8) {
-          const k = (d - 1.3) / d;
-          try { await Promise.race([mum.goTo?.({ x: o.x + (pp.x - o.x) * k, z: o.z + (pp.z - o.z) * k }) || Promise.resolve(), K.wait(4)]); } catch { /* optional */ }
+    // Mamma walks over while the scene still holds the controls (the portrait shot is still on)
+    const relMum = ctx.busy.push('cutscene');
+    try {
+      if (mum) {
+        const pp = K.playerPos();
+        if (pp) {
+          const o = mum.object.position, d = dist2(o, pp);
+          if (d > 1.8) {
+            const k = (d - 1.3) / d;
+            try { await Promise.race([mum.goTo?.({ x: o.x + (pp.x - o.x) * k, z: o.z + (pp.z - o.z) * k }) || Promise.resolve(), K.wait(4)]); } catch { /* optional */ }
+          }
         }
       }
-    }
+    } finally { relMum(); }
+    if (!mum) restoreCamera();
     await mumIntro(mum);
     restoreCamera();
   }
@@ -415,21 +422,24 @@ export function wireChapters(ctx) {
       const T = K.poi('lab.alba.table') || K.poi('lab.alba.owner') || { ...(K.playerPos() || { x: 0, z: 0 }), facing: 0 };
       const f = T.facing || 0, fx = Math.sin(f), fz = Math.cos(f), sx = Math.cos(f), sz = -Math.sin(f);
       const y0 = K.groundY(T.x, T.z);
+      // the three Velmon stand on the floor in front of the lab table; frame them from behind the player
+      const overview = dur => K.frame({ x: T.x + fx * 0.6, y: y0 + 0.4, z: T.z + fz * 0.6 }, { x: -fx * 0.9 - sx * 0.44, z: -fz * 0.9 - sz * 0.44 },
+        { width: 3.2, height: 1.6, elev: 34, fov: 38, maxDist: 5.2, dur });
       // player steps back to watch, Quercia moves aside
       await K.busy('cutscene', async () => {
-        const pp = { x: T.x - fx * 1.2, z: T.z - fz * 1.2 };
+        const pp = { x: T.x - fx * 1.0 + sx * 1.1, z: T.z - fz * 1.0 + sz * 1.1 };
         try { await Promise.race([ctx.player?.human?.moveTo?.(pp) || Promise.resolve(), K.wait(2.5)]); } catch { /* optional */ }
         if (!ctx.player?.human?.moveTo) teleportPlayer(pp.x, pp.z, f);
         await playerFace({ x: T.x + fx * 3, z: T.z + fz * 3 });
         const qp = { x: T.x + fx * 0.9 + sx * 1.9, z: T.z + fz * 0.9 + sz * 1.9 };
         try { npc?.goTo?.(qp)?.catch?.(() => {}); } catch { /* optional */ }
-        await K.shot({ x: T.x - fx * 3.4, y: y0 + 2.1, z: T.z - fz * 3.4 }, { x: T.x + fx * 0.5, y: y0 + 0.5, z: T.z + fz * 0.5 }, { fov: 40, dur: 1.1 });
+        await overview(1.1);
         try { npc?.human?.play?.('throw_ball', { loop: false })?.then?.(() => npc?.human?.play?.('idle')); } catch { /* optional */ }
         K.sfx('ball_throw');
         await K.wait(0.35);
         // three balls pop open → the starters appear with a bounce
         for (let i = 0; i < 3; i++) {
-          const x = T.x + fx * 0.6 + sx * (i - 1) * 0.95, z = T.z + fz * 0.6 + sz * (i - 1) * 0.95, y = K.groundY(x, z);
+          const x = T.x + fx * 0.6 - sx * (i - 1) * 0.95, z = T.z + fz * 0.6 - sz * (i - 1) * 0.95, y = K.groundY(x, z);
           const ball = S.fx.add(buildBall(ctx, 'sfera'), { x, y: y + 0.9, z });
           ball.scale.setScalar(1.4);
           await K.tween(0.28, k => { ball.position.y = y + 0.9 * (1 - k) + Math.sin(k * Math.PI) * 0.4; ball.rotation.x = k * 6; });
@@ -451,14 +461,15 @@ export function wireChapters(ctx) {
 
       let chosen = null;
       while (!chosen) {
-        await K.shot({ x: T.x - fx * 3.4, y: y0 + 2.1, z: T.z - fz * 3.4 }, { x: T.x + fx * 0.5, y: y0 + 0.5, z: T.z + fz * 0.5 }, { fov: 40, dur: 0.7 });
+        await overview(0.7);
         const i = await S.dialogue.required('Quale Velmon scegli?', STARTERS.map(id => ({ icon: STARTER_INFO[id].icon, label: K.speciesName(id), sub: `Tipo ${STARTER_INFO[id].type}` })));
         const s = models[i];
-        await K.shot({ x: s.x - fx * 1.9, y: s.y + 0.9, z: s.z - fz * 1.9 }, { x: s.x, y: s.y + 0.35, z: s.z }, { fov: 34, dur: 0.75 });
+        const h = s.obj.userData.height || 0.8;
+        await K.frame({ x: s.x, y: s.y + h * 0.5, z: s.z }, { x: -fx * 0.94 - sx * 0.34, z: -fz * 0.94 - sz * 0.34 }, { width: h * 1.5, height: h * 1.5, elev: 12, fov: 32, dur: 0.75 });
         try { s.m?.play?.('happy', { loop: false })?.then?.(() => s.m?.play?.('idle')); } catch { /* optional */ }
         K.sfx('ui_tap');
         await say(QUERCIA, [STARTER_INFO[s.id].line], { camera: 'none' });
-        if (await K.confirm(`Scegli ${K.speciesName(s.id)}?`, { yes: 'Sì, lui!', no: 'Ci penso ancora' })) chosen = s;
+        if (await K.confirm(`Scegli ${K.speciesName(s.id)}?`, { yes: 'Sì!', no: 'Ci penso ancora' })) chosen = s;
       }
 
       // the others go back in their Sfere, the chosen one hops to you
@@ -480,7 +491,7 @@ export function wireChapters(ctx) {
       flags.set('starter_chosen', true);
       K.banner(`Hai ricevuto ${K.speciesName(chosen.id)}!`, 'Il tuo primo Velmon');
       await say(QUERCIA, [
-        { t: `Ottima scelta! ${K.speciesName(chosen.id)} sembra già pazzo di te.`, e: 'laugh', g: 'cheer' },
+        { t: `Ottima scelta! Guarda come ti fa le feste, ${K.speciesName(chosen.id)}!`, e: 'laugh', g: 'cheer' },
         { t: 'Mettiamolo subito alla prova: sul Percorso 1, appena fuori dal paese, l\'erba alta è piena di Velmon selvatici.', e: 'smile', g: 'point' },
         { t: 'Vai a dare un\'occhiata. Io ti aspetto fuori dal laboratorio!', e: 'smile', g: 'wave' },
       ], { actor: npc });
@@ -573,11 +584,20 @@ export function wireChapters(ctx) {
   // ------------------------------------------------------------------ the camp (chapter 1)
   let camp = null;
   function syncCamp() {
-    const want = step('main1') >= 3 && !done('main1') && K.playerIsland() === 'aurora';
+    // the world builds the camp scenery itself (tents, fire, banners at r1.camp); this is only the no-world fallback
+    const want = !ctx.world && step('main1') >= 3 && !done('main1') && K.playerIsland() === 'aurora';
     if (want && !camp) {
       const p = K.poi('r1.camp'); if (!p) return;
       camp = buildCamp(ctx);
-      camp.rotation.y = p.facing || 0;
+      // open side (campfire) towards the route, tents and banner behind
+      let face = p.facing || 0;
+      try {
+        const pts = ctx.world?.minimap?.()?.routes?.find(r => r.id === 'r1')?.points || [];
+        let best = null, bd = 1e9;
+        for (const q of pts) { const x = q.x ?? q[0], z = q.z ?? q[1], d = Math.hypot(x - p.x, z - p.z); if (d < bd) { bd = d; best = { x, z }; } }
+        if (best && bd > 1) face = Math.atan2(best.x - p.x, best.z - p.z);
+      } catch { /* keep the POI facing */ }
+      camp.rotation.y = face;
       S.fx.add(camp, { x: p.x, y: p.y ?? K.groundY(p.x, p.z), z: p.z });
       try { camp.userData.colliderId = ctx.world?.colliders?.add?.({ x: p.x, z: p.z, r: 0.9 }); } catch { /* optional */ }
     } else if (!want && camp) {
@@ -696,7 +716,7 @@ export function wireChapters(ctx) {
       await K.narrate(['Il sole sorge sull\'arcipelago di Valmora.', 'L\'Eclissi è sconfitta, e Aurorante ha scelto di viaggiare con te.', 'Isole lontane, Velmon mai visti e nuove storie ti aspettano...']);
       await sunrise;
       K.banner('Leggende di Valmora', 'Fine del Capitolo 3 · Grazie per aver giocato!');
-      K.jingle('victory');
+      K.jingle('quest');
       await K.wait(3.2);
       await ctx.fade.out(900, '#fff6e0');
       try { await ctx.cameraRig?.release?.({ dur: 0 }); } catch { /* optional */ }
@@ -710,7 +730,8 @@ export function wireChapters(ctx) {
   // Lab: entering at prologue step 1 starts the starter scene by itself
   ctx.bus.on('interior:enter', ({ id } = {}) => {
     if (id !== 'lab.alba' || !is('prologo', 1)) return;
-    K.wait(0.7).then(() => { if (is('prologo', 1) && !ctx.busy.is()) starterScene(R.get('story.quercia_lab')); });
+    K.wait(0.5).then(() => K.until(() => !ctx.busy.is(), 6)).then(() => K.wait(0.3))
+      .then(() => { if (is('prologo', 1) && !ctx.busy.is() && ctx.world?.interior === 'lab.alba') starterScene(R.get('story.quercia_lab')); });
   });
   // first wild battle on Percorso 1
   zones.add({
@@ -752,7 +773,7 @@ export function wireChapters(ctx) {
   ctx.bus.on('area:enter', ({ id, kind } = {}) => {
     syncEncounters();
     if (K.party().length || !(kind === 'route' || /^r\d$/.test(id || ''))) return;
-    if (S._pushBack) return;
+    if (S._pushBack || ctx.busy.has('scene') || ctx.busy.has('cutscene')) return;
     S._pushBack = true;
     (async () => {
       await K.wait(0.2);
@@ -793,6 +814,9 @@ export function wireChapters(ctx) {
     starterScene: () => starterScene(R.get('story.quercia_lab')),
     intro,
     ending,
+    faceLegend: () => faceLegend(),
+    get legend() { return legend; },
+    get camp() { return camp; },
     /** Debug: jump to the start of chapter n (1..3); previous chapters marked done. */
     debugChapter(n = 1) {
       skipPrologue();

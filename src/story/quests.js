@@ -162,7 +162,8 @@ export function createQuests(ctx) {
       // a running shady job takes over the tracker (timed, and the player chose it just now)
       const job = ctx.story.crime?.job;
       if (job?.target && !(job.kind === 'theft' && job.goal === 'Semina le guardie!')) {
-        return { questId: 'job', title: job.title, text: job.goal, target: { x: job.target.x, z: job.target.z }, areaId: null, main: false, job: true, outside: false, step: 0, steps: 1 };
+        const text = job.kind === 'race' ? 'Prossimo cerchio' : job.kind === 'theft' ? 'La bancarella con l\'incasso' : 'Il socio ti aspetta qui';
+        return { questId: 'job', title: 'Lavoretto', text, target: { x: job.target.x, z: job.target.z }, areaId: null, main: false, job: true, outside: false, step: 0, steps: 1 };
       }
       const id = q.trackedId();
       if (!id) return null;
@@ -202,7 +203,8 @@ export function createQuests(ctx) {
       // beacon: hidden indoors, during scenes and when you are already there
       const pp = K().playerPos();
       const near = t && pp ? dist2(pp, t) < 7 : false;
-      const show = t && !near && !ctx.world?.interior;
+      const scene = ctx.busy.tags?.some?.(x => x === 'cutscene' || x === 'battle' || x === 'scene' || x === 'travel');
+      const show = t && !near && !ctx.world?.interior && !scene;
       const bsig = show ? `${Math.round(t.x * 2)},${Math.round(t.z * 2)}` : 'off';
       if (bsig !== beaconSig) {
         beaconSig = bsig;
@@ -221,6 +223,7 @@ export function createQuests(ctx) {
   };
 
   for (const e of CHECK_EVENTS) ctx.bus.on(e, () => { q.check(); q.refresh(); });
+  ctx.bus.on('busy:change', () => q.refresh());
   ctx.bus.on('game:start', () => { lastSig = ''; beaconSig = ''; q.check(); q.refresh(true); });
 
   ctx.loop.add(function storyQuests(dt) {

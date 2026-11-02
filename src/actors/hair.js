@@ -64,12 +64,12 @@ export function buildHair(RB, L, spec) {
     const n = 5;
     for (let i = 0; i < n; i++) {
       const x = -0.5 + i / (n - 1);
-      RB.add(bang(x * 0.7, x * 0.95 + 0.06, 0.38 + 0.05 * Math.abs(x), 0.03 * hr), { part: 'hair', bone: 'head', color: shade(1.02) });
+      RB.add(bang(x * 0.7, x * 0.95 + 0.06, 0.38 + 0.05 * Math.abs(x), 0.03 * hr), { part: 'bangs', bone: 'head', color: shade(1.02) });
     }
   } else if (style === 'pixie') {
     for (let i = 0; i < 4; i++) {
       const x = -0.35 + i * 0.22;
-      RB.add(bang(x, x + 0.35, 0.22 - i * 0.04, 0.032 * hr), { part: 'hair', bone: 'head', color: shade(1.02) });
+      RB.add(bang(x, x + 0.35, 0.22 - i * 0.04, 0.032 * hr), { part: 'bangs', bone: 'head', color: shade(1.02) });
     }
   } else {
     // soft curtain bangs split at the centre, ending around the brows
@@ -77,7 +77,7 @@ export function buildHair(RB, L, spec) {
     for (let i = 0; i < n; i++) {
       const x = -0.62 + (1.24 * i) / (n - 1);
       const side = Math.sign(x) || 1;
-      RB.add(bang(x * 0.6, x + side * 0.08, 0.2 + 0.1 * Math.abs(x) ** 1.5, 0.032 * hr), { part: 'hair', bone: 'head', color: shade(1.02) });
+      RB.add(bang(x * 0.6, x + side * 0.08, 0.2 + 0.1 * Math.abs(x) ** 1.5, 0.032 * hr), { part: 'bangs', bone: 'head', color: shade(1.02) });
     }
   }
 
@@ -86,7 +86,7 @@ export function buildHair(RB, L, spec) {
     for (const k of [1, -1]) {
       const a = on(0.78 * k, 0.45, 0.45), m = on(0.95 * k, -0.15, 0.32, 1.13);
       const b = V(C[0] + k * R[0] * 1.02, endY, C[2] + R[2] * 0.25);
-      RB.add(lock([a, m, b], w * hr, { radii: [[0, w * hr], [0.6, w * hr * 1.05], [1, 0.002]] }), { part: 'hair', bone: 'head', color: shade(0.98) });
+      RB.add(lock([a, m, b], w * hr, { radii: [[0, w * hr], [0.6, w * hr * 1.05], [1, 0.002]] }), { part: 'bangs', bone: 'head', color: shade(0.98) });
     }
   };
 

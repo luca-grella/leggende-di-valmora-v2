@@ -31,16 +31,21 @@ export async function playEvolution(ctx, mon, toSpecies, opts = {}) {
   try {
     if (ownStage) {
       // stage the Velmon in front of the player, facing them
+      // stage the Velmon between the player and the camera, facing the camera (its face reads, the player is behind)
       const pl = ctx.player?.object || ctx.cameraRig?.followed;
-      const f = pl?.rotation?.y ?? 0;
-      const x = (pl?.position.x ?? 0) + Math.sin(f) * 2.0, z = (pl?.position.z ?? 0) + Math.cos(f) * 2.0;
+      const px = pl?.position.x ?? 0, pz = pl?.position.z ?? 0;
+      const cam = ctx.camera?.position;
+      let dx = cam ? cam.x - px : 0, dz = cam ? cam.z - pz : 1;
+      const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
+      const x = px + dx * 1.7 + dz * 0.5, z = pz + dz * 1.7 - dx * 0.5;
       oldM = buildVelmon(ctx, mon.species);
       oldM.object.position.set(x, groundAt(ctx, x, z, pl?.position.y ?? 0), z);
-      oldM.object.rotation.y = f + Math.PI;
+      oldM.object.rotation.y = Math.atan2(dx, dz);
       ctx.scene.add(oldM.object);
       stageObj = oldM.object;
       oldM.play('appear');
-      if (pl) oldM.lookAt(pl);
+      ctx.player?.face?.({ x, z });
+      ctx.player?.lookAt?.(oldM.object);
       await wait(ctx, 0.5);
     }
     const obj = oldM.object;
@@ -106,6 +111,7 @@ export async function playEvolution(ctx, mon, toSpecies, opts = {}) {
     for (const mv of learned) await say(`${nameOf(mon)} impara ${mv}!`);
 
     if (ownStage) {
+      ctx.player?.lookAt?.(null);
       await tween(ctx, 0.35, k => newM.object.scale.setScalar(Math.max(0.001, 1 - k)), 'in');
       newM.dispose();
       oldM.dispose();
@@ -122,6 +128,6 @@ export async function playEvolution(ctx, mon, toSpecies, opts = {}) {
     if (stageObj) oldM?.dispose?.();
     return { model: null, learned: [] };
   } finally {
-    if (ownStage) { if (prevTrack && prevTrack !== 'evolution') ctx.audio?.music?.(prevTrack); release?.(); }
+    if (ownStage) { ctx.player?.lookAt?.(null); if (prevTrack && prevTrack !== 'evolution') ctx.audio?.music?.(prevTrack); release?.(); }
   }
 }

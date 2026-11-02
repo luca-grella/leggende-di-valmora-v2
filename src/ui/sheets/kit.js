@@ -13,7 +13,7 @@ export const empty = (ic, text, sub) => el('div.sh-empty', el('div.sh-empty-ic',
 /** Segmented tabs. items: [{id, label, icon?, count?}] → {el, set(id)} ; onChange(id). */
 export function tabs(items, active, onChange) {
   const btns = items.map(it => {
-    const b = el('button.tab', { type: 'button', 'data-id': it.id }, it.icon ? el('span.tab-ic', { html: icon(it.icon) }) : null, el('span', it.label), it.count != null ? el('span.tab-n', String(it.count)) : null);
+    const b = el('button.tab', { type: 'button', 'data-id': it.id }, it.icon ? el('span.tab-ic', { html: icon(it.icon) }) : null, el('span', it.label), it.count != null ? el('span.tab-n' + (+it.count ? '' : '.zero'), String(it.count)) : null);
     onTap(b, () => set(it.id, true));
     return b;
   });

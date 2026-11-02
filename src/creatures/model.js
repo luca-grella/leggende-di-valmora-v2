@@ -119,8 +119,9 @@ export function buildVelmon(ctx, speciesId, { scale = 1 } = {}) {
   rig.add(body);
   rig.updateMatrixWorld(true);
   body.bind(skeleton);
+  let glow = null;
   if (T.geos.glow) {
-    const glow = new THREE.SkinnedMesh(T.geos.glow, glowMaterial(ctx));
+    glow = new THREE.SkinnedMesh(T.geos.glow, glowMaterial(ctx));
     glow.frustumCulled = false; glow.name = 'velmon-glow';
     rig.add(glow); glow.bind(skeleton, body.bindMatrix);
   }
@@ -216,6 +217,7 @@ export function buildVelmon(ctx, speciesId, { scale = 1 } = {}) {
 
     // material: flash/silhouette + glow
     mat.userData.u.uFlash.value = Math.max(chA.flash, sil);
+    if (glow) glow.visible = sil < 0.5;          // flames / eye shine vanish inside the white silhouette
     glowV += (glowTarget - glowV) * (1 - Math.exp(-8 * dt));
     const g = Math.max(glowV, chA.glow * 0.42);
     if (g > 0.003) { mat.emissive.copy(glowColor); mat.emissiveIntensity = g; }

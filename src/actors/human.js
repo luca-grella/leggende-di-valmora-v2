@@ -159,10 +159,6 @@ function buildBody(RB, L, spec) {
   const sleeveless = ['tank', 'camisole', 'swimsuit', 'dress'].includes(st);
   const strap = { tank: [0.055, 0.115], camisole: [0.075, 0.092], swimsuit: [0.068, 0.098], dress: [0.06, 0.112] }[st];
   const strapColor = (p) => {
-    if (L.accessory === 'backpack') {
-      const a = Math.abs(Math.atan2(p.x, p.z)), Y = p.y / s;
-      if (Math.abs(Math.abs(p.x) / s - 0.088) < (p.z > 0 ? 0.016 : 0.022) && Y > (p.z > 0 ? 1.0 : 1.16)) return mix(accC, '#000', 0.35);
-    }
     if (L.accessory === 'bag') {
       const Y = p.y / s, x = p.x / s, sgn = p.z > 0 ? 1 : -1;
       const ax = 0.11, ay = 1.3, bx = -0.15, by = 0.9;   // over the left shoulder down to the right hip
@@ -382,6 +378,14 @@ function buildBody(RB, L, spec) {
     const pc = [0, y, -t.rz - 0.062 * s];
     RB.add(ellipsoid({ c: pc, r: [0.12 * s, 0.145 * s, 0.072 * s], seg: [14, 10], deform: (v, u) => { const kk = 1 + 0.12 * (1 - Math.abs(u.y)); v.x *= Math.min(1.1, kk); } }), { part: 'pack', bone: 'back', color: (p) => (p.y > y + 0.09 * s ? mix(accC, '#000', 0.2) : accC) });
     RB.add(ellipsoid({ c: [0, y - 0.05 * s, pc[2] - 0.06 * s], r: [0.075 * s, 0.06 * s, 0.03 * s], seg: [10, 8] }), { part: 'pack', bone: 'back', color: () => mix(accC, '#ffffff', 0.25) });
+    // shoulder straps (geometry: crisp at any distance)
+    for (const k of [1, -1]) {
+      const zf = (yy) => torsoAt(yy * s).rz + torsoAt(yy * s).oz + 0.007 * s;
+      const pts = [V(0.082 * k * s, 1.0 * s, zf(1.0) * 0.96), V(0.09 * k * s, 1.14 * s, zf(1.14)), V(0.095 * k * s, 1.27 * s, zf(1.27) * 0.92),
+        V(0.1 * k * s, 1.335 * s, 0.0), V(0.095 * k * s, 1.26 * s, -zf(1.26) - 0.004 * s), V(0.085 * k * s, 1.16 * s, -zf(1.16) - 0.03 * s)];
+      RB.add(tube({ points: pts, radii: [[0, 0.011 * s], [1, 0.011 * s]], seg: 5, rings: 18, flatten: 0.45, up: (t, c) => V(c.x * 0.3, c.y - 1.15 * s, c.z).normalize() }),
+        { part: 'pack', color: () => mix(accC, '#000', 0.3), weights: (q) => { const t = sstep(1.27 * s, 1.335 * s, q.y); return [['chest', 1 - 0.3 * t], [k > 0 ? 'shoulder_L' : 'shoulder_R', 0.3 * t]]; } });
+    }
   } else if (acc2 === 'glasses' || acc2 === 'sunglasses') {
     const fc = col(acc2 === 'sunglasses' ? '#1e1e24' : (L.accessoryColor || '#3a3a3a'));
     for (const [side, k] of [['L', 1], ['R', -1]]) {

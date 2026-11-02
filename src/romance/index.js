@@ -282,7 +282,7 @@ export function init(ctx) {
   async function homeScene(girl) {
     if (!girl || homeRunning || scenes.active || !enabled() || g(girl.id).stage < 2) return;
     // the evening happens inside her house: enter it first (interior:enter brings us back here)
-    if (ctx.world?.enterInterior && ctx.world.interior !== girl.home && !ctx.world.interior) {
+    if (ctx.world?.enterInterior && ctx.world.interior !== girl.home) {
       try { await ctx.world.enterInterior(girl.home); return; } catch (e) { console.warn('[romance] enterInterior', e); }
     }
     homeRunning = true;

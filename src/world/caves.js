@@ -24,7 +24,7 @@ export function buildCave(ctx, C, mats) {
   const S = 1.0;
   const nx = Math.ceil((x1 - x0) / S) + 1, nz = Math.ceil((z1 - z0) / S) + 1;
   const pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3);
-  const cF = new THREE.Color(K.floor), cW = new THREE.Color(K.wall), cT = new THREE.Color(K.wall).lerp(new THREE.Color('#ffffff'), 0.12), c = new THREE.Color();
+  const cA = new THREE.Color(K.floor).lerp(new THREE.Color('#fff4e0'), 0.55), cF = new THREE.Color(K.floor), cW = new THREE.Color(K.wall), cT = new THREE.Color(K.wall).lerp(new THREE.Color('#ffffff'), 0.12), c = new THREE.Color();
   const H = new Float32Array(nx * nz);
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
     const x = x0 + i * S, z = z0 + j * S, k = j * nx + i;
@@ -33,8 +33,8 @@ export function buildCave(ctx, C, mats) {
     const h = d < 0 ? Math.max(-0.05, n * 0.06) : smoothstep(0, 2.6, d) * (4.5 + n * 2.5) + smoothstep(3, 9, d) * 2;
     H[k] = h;
     pos[k * 3] = x; pos[k * 3 + 1] = h; pos[k * 3 + 2] = z;
-    if (d < 0) c.copy(cF).multiplyScalar(0.92 + n * 0.12 + (N.noise2(x * 0.5, z * 0.5) > 0.55 ? -0.08 : 0));
-    else c.copy(cW).lerp(cT, smoothstep(3, 6, h)).multiplyScalar(1 - 0.25 * (1 - smoothstep(0, 1.2, d)));
+    if (d < 0) { c.copy(cF).multiplyScalar(1.3 + n * 0.15 + (N.noise2(x * 0.5, z * 0.5) > 0.5 ? -0.14 : 0) - 0.3 * smoothstep(-1.5, 0, d)); if (N.fbm(x * 0.06 + 9, z * 0.06, 2) > 0.15) c.lerp(cA, 0.22); }
+    else c.copy(cT).lerp(cW, smoothstep(0.3, 2.5, d)).multiplyScalar(0.95 - 0.3 * smoothstep(2, 7, d) + n * 0.08);
     col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
   }
   const idx = [];
@@ -54,10 +54,10 @@ export function buildCave(ctx, C, mats) {
   const inside = (x, z, pad) => caveSDF(C, x, z) < -pad;
   for (const ch of C.chambers) {
     // ring of stalagmites near the wall, crystals/mushrooms in clusters
-    for (let k = 0; k < Math.round(ch.r * 1.4); k++) {
+    for (let k = 0; k < Math.round(ch.r * 2.2); k++) {
       const a = R() * Math.PI * 2, rr = ch.r * (0.7 + R() * 0.28), x = ch.x + Math.sin(a) * rr, z = ch.z + Math.cos(a) * rr;
       if (!inside(x, z, 0.6)) continue;
-      if (R() < 0.5) { const s = 0.4 + R() * 0.5; b.cone(s, 1.6 + R() * 1.6, x, 0.7, z, K.wall, { seg: 7, grad: 0.4 }); colliders.push({ type: 'circle', x, z, r: s * 0.9 }); }
+      if (R() < 0.4) { const s = 0.3 + R() * 0.5; b.cone(s, 1.4 + R() * 1.4, x, 0.6, z, K.floor, { seg: 7, grad: 0.5 }); colliders.push({ type: 'circle', x, z, r: s * 0.9 }); }
       else cluster(x, z, 0.6 + R() * 0.6);
     }
     if (R() < 0.6) { const x = ch.x + (R() - 0.5) * ch.r, z = ch.z + (R() - 0.5) * ch.r; if (inside(x, z, 2)) b.cyl(1.4 + R(), 1.4 + R(), 0.04, x, 0.02, z, K.accent === '#ffffff' ? '#bfe6ff' : '#3fa0c8', { seg: 14, mat: 'glow', sz: 0.7 }); }

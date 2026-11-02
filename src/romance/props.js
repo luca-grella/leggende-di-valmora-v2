@@ -86,13 +86,14 @@ function chair(ctx, B, at, ry, cushion = C.red) {
     const m = new THREE.Matrix4().compose(new THREE.Vector3(...p), new THREE.Quaternion().setFromEuler(new THREE.Euler(...r)), new THREE.Vector3(1, 1, 1));
     B.solid(g, c, { m: M.clone().multiply(m) });
   };
-  add(rb(ctx, 0.46, 0.06, 0.44, 0.025), C.wood, [0, 0.44, 0]);
-  add(rb(ctx, 0.4, 0.05, 0.38, 0.025), cushion, [0, 0.49, 0.01]);
-  for (const [x, z] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) add(new THREE.CylinderGeometry(0.025, 0.03, 0.44, 8), C.woodDark, [x, 0.22, z]);
+  // seat top at 0.45 m = Actors SIT_H (sit_idle hips rest there)
+  add(rb(ctx, 0.46, 0.06, 0.44, 0.025), C.wood, [0, 0.39, 0]);
+  add(rb(ctx, 0.4, 0.04, 0.38, 0.02), cushion, [0, 0.43, 0.01]);
+  for (const [x, z] of [[-0.19, -0.18], [0.19, -0.18], [-0.19, 0.18], [0.19, 0.18]]) add(new THREE.CylinderGeometry(0.025, 0.03, 0.39, 8), C.woodDark, [x, 0.195, z]);
   // backrest behind the sitter (sitter faces +z of the chair)
-  for (const x of [-0.19, 0.19]) add(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), C.woodDark, [x, 0.7, -0.2]);
-  add(rb(ctx, 0.44, 0.13, 0.04, 0.02), C.wood, [0, 0.86, -0.2]);
-  add(rb(ctx, 0.4, 0.06, 0.035, 0.015), C.woodLight, [0, 0.68, -0.2]);
+  for (const x of [-0.19, 0.19]) add(new THREE.CylinderGeometry(0.025, 0.025, 0.5, 8), C.woodDark, [x, 0.65, -0.2]);
+  add(rb(ctx, 0.44, 0.13, 0.04, 0.02), C.wood, [0, 0.81, -0.2]);
+  add(rb(ctx, 0.4, 0.06, 0.035, 0.015), C.woodLight, [0, 0.63, -0.2]);
 }
 
 /**

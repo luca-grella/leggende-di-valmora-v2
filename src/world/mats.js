@@ -13,6 +13,33 @@ export function extendToon(m, key, fn) {
 }
 
 export const WIND = { uTime: { value: 0 }, uWind: { value: 1 }, uPush: { value: new THREE.Vector4(0, 0, -9999, 0) } };
+/** See-through for vegetation between the camera and the player (set every frame by src/game.js):
+ *  uOccA = camera position, uOccB = player chest position, uOccR = radius (0 = off). */
+export const OCCLUDE = { uOccA: { value: new THREE.Vector3() }, uOccB: { value: new THREE.Vector3(0, -9999, 0) }, uOccR: { value: 0 } };
+
+const OCC_VERT = /* glsl */`
+#include <project_vertex>
+{
+  vec4 ow = vec4(transformed, 1.0);
+  #ifdef USE_INSTANCING
+    ow = instanceMatrix * ow;
+  #endif
+  vOccW = (modelMatrix * ow).xyz;
+}`;
+const OCC_FRAG = /* glsl */`
+#include <clipping_planes_fragment>
+if (uOccR > 0.0) {
+  vec3 ab = uOccB - uOccA;
+  float L2 = max(dot(ab, ab), 1e-4);
+  float t = clamp(dot(vOccW - uOccA, ab) / L2, 0.0, 1.0);
+  float d = length(vOccW - (uOccA + ab * t));
+  float before = (1.0 - t) * sqrt(L2);            // metres before the player along the view line
+  float k = (1.0 - smoothstep(uOccR * 0.55, uOccR, d)) * smoothstep(0.6, 2.2, before);
+  // 4x4 ordered dither: soft-looking see-through without transparency sorting
+  vec2 q = mod(floor(gl_FragCoord.xy), 4.0);
+  float th = (mod(q.x + q.y * 2.0, 4.0) * 4.0 + mod(q.y + q.x * 3.0, 4.0) + 0.5) / 16.0;
+  if (k * 0.82 > th) discard;
+}`;
 
 const WIND_VERT = /* glsl */`
 #include <begin_vertex>
@@ -53,8 +80,9 @@ export function createWorldMats(ctx) {
     const m = T.matUnique('#ffffff', { vertexColors: true, side: o.side ?? THREE.FrontSide });
     const U = { uSway: { value: sway }, uSwayBase: { value: base } };
     extendToon(m, 'wind', sh => {
-      Object.assign(sh.uniforms, WIND, U);
-      sh.vertexShader = 'uniform float uTime, uWind, uSway, uSwayBase;\n' + sh.vertexShader.replace('#include <begin_vertex>', WIND_VERT);
+      Object.assign(sh.uniforms, WIND, U, OCCLUDE);
+      sh.vertexShader = 'uniform float uTime, uWind, uSway, uSwayBase;\nvarying vec3 vOccW;\n' + sh.vertexShader.replace('#include <begin_vertex>', WIND_VERT).replace('#include <project_vertex>', OCC_VERT);
+      sh.fragmentShader = 'uniform vec3 uOccA, uOccB;\nuniform float uOccR;\nvarying vec3 vOccW;\n' + sh.fragmentShader.replace('#include <clipping_planes_fragment>', OCC_FRAG);
     });
     m.customProgramCacheKey = (k => () => k)(m.customProgramCacheKey() + key);
     windCache.set(key, m);

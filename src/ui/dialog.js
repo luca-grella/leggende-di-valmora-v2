@@ -56,7 +56,7 @@ export function createDialog(ctx, root, focus) {
     const has = !!speaker;
     name.classList.toggle('hidden', !has);
     box.classList.toggle('narration', !has);
-    box.classList.remove('prompt');
+    box.classList.remove('prompt', 'romance');
     if (has) { name.textContent = speaker; name.style.setProperty('--nc', color || hashColor(speaker)); }
   }
   /** Parse *emphasis* and build one span per character. */
@@ -191,7 +191,7 @@ export function createDialog(ctx, root, focus) {
         choices.classList.add('show');
         setSel(sel);
       };
-      if (title) { setSpeaker(opts.speaker || null, opts.color); box.classList.remove('narration'); box.classList.add('prompt'); showLine(title); }
+      if (title) { setSpeaker(opts.speaker || null, opts.color); box.classList.remove('narration'); box.classList.add('prompt'); box.classList.toggle('romance', romance); showLine(title); }
       else { box.classList.remove('show'); cur.done = true; cur.onTyped(); }
     }));
   }

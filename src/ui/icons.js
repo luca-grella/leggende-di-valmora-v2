@@ -71,6 +71,9 @@ const ICONS = {
   swap: `<path d="M20 34 H74 L62 22 M80 66 H26 L38 78" fill="none" stroke="${O}" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 34 H74 L62 22 M80 66 H26 L38 78" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>`,
   up: `<path d="M20 64 L50 34 L80 64" fill="none" stroke="${O}" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 64 L50 34 L80 64" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`,
   hand: `<path d="M30 88 Q18 70 22 54 L26 40 Q30 34 34 40 V30 Q36 22 42 26 V20 Q46 12 52 20 V24 Q58 18 62 26 V34 Q68 28 72 36 V60 Q72 80 58 88 Z" fill="#ffd9b8" ${S}/>`,
+  music: `<path d="M38 70 V22 L82 12 V60" fill="none" ${S} stroke-width="7"/><ellipse cx="28" cy="72" rx="13" ry="10" fill="#9b7fd1" ${S}/><ellipse cx="72" cy="62" rx="13" ry="10" fill="#ff5f9e" ${S}/><path d="M38 34 L82 24" ${S} stroke-width="7"/>`,
+  sound: `<path d="M14 40 H32 L54 20 V80 L32 60 H14 Z" fill="#2bb7c9" ${S}/><path d="M66 36 Q76 50 66 64 M76 26 Q94 50 76 74" fill="none" ${S} stroke-width="6"/>`,
+  quality: `<rect x="10" y="20" width="80" height="56" rx="10" fill="#9ee8ff" ${S}/><path d="M18 68 L40 44 L54 58 L66 48 L84 68 Z" fill="#7dcb4c" ${s3}/><circle cx="70" cy="34" r="7" fill="#ffc93c" ${s3}/><path d="M36 88 H64" ${S}/>`,
   talk: `<path d="M14 24 Q14 14 24 14 H76 Q86 14 86 24 V58 Q86 68 76 68 H44 L28 84 V68 H24 Q14 68 14 58 Z" fill="#fff" ${S}/><circle cx="34" cy="41" r="5" fill="${O}"/><circle cx="50" cy="41" r="5" fill="${O}"/><circle cx="66" cy="41" r="5" fill="${O}"/>`,
 };
 

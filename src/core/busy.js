@@ -7,6 +7,8 @@ export function createBusy({ bus }) {
     get tags() { return [...tags]; },
     is: () => tags.length > 0,
     has: tag => tags.includes(tag),
+    /** Emergency: drop every tag except `keep` (integration watchdog for locks left by a broken scene). */
+    forceClear(keep = []) { for (let i = tags.length - 1; i >= 0; i--) if (!keep.includes(tags[i])) tags.splice(i, 1); emit(); },
     /** Push a tag; returns release() (idempotent). */
     push(tag = 'busy') {
       tags.push(tag); emit();

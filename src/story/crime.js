@@ -108,6 +108,7 @@ export function createCrime(ctx) {
       if (ang > 1.2) return false;
     }
     const cols = ctx.world?.colliders;
+    if (typeof cols?.segmentBlocked === 'function') { try { return !cols.segmentBlocked(o.x, o.z, pp.x, pp.z); } catch { return true; } }
     if (typeof cols?.blocked === 'function') {
       const n = Math.floor(d / 1.5);
       for (let i = 1; i < n; i++) { const k = i / n; if (cols.blocked(o.x + (pp.x - o.x) * k, o.z + (pp.z - o.z) * k, 0.05)) return false; }
@@ -335,7 +336,7 @@ export function createCrime(ctx) {
     const list = deliveryTargets(fixer);
     if (!list.length) { await K().say(fixer.name, ['Oggi niente consegne. Ripassa più tardi.'], { actor: npc }); return; }
     const tgt = pick(list), from = K().playerPos() || tgt.p;
-    const d = dist2(from, tgt.p), time = Math.round((d * 1.15) / 11 + 45), pay = 500 + Math.round(d / 10) * 5;
+    const d = dist2(from, tgt.p), time = Math.round((d * 1.2) / 6.5 + 40), pay = 500 + Math.round(d / 10) * 5;
     const town = tgt.id.split('.')[0], where = TOWN_NAMES[town] || 'laggiù';
     const parcel = buildParcel(ctx);
     job = { kind: 'delivery', title: '📦 Consegna', goal: `Porta il pacco al socio (${where})`, fixer, target: { x: tgt.p.x, z: tgt.p.z }, time, pay, parcel, markers: [] };
@@ -343,9 +344,11 @@ export function createCrime(ctx) {
     job.contactId = 'job.contact';
     try { ctx.actors?.spawnNpc?.({ id: job.contactId, name: 'Socio', look: lookFor(ctx, 'contact', STORY_LOOKS.contact), at: { x: tgt.p.x, z: tgt.p.z, facing: tgt.p.facing || 0 }, wander: null }); } catch { /* optional */ }
     await K().say(fixer.name, [`Porta questo pacco al mio socio a ${where}. Non aprirlo e non fare domande.`, `Hai ${mmss(time)}. Uno scooter ti farebbe comodo... 😏`], { actor: npc, gesture: 'point', expression: 'smug' });
-    await ctx.story.dialogue.release();
+    if (job?.parcel !== parcel) return;            // aborted meanwhile
     carry(parcel);
+    job.started = true;
     ctx.bus.emit('job:start', { kind: 'delivery' });
+    await ctx.story.dialogue.release();
   }
 
   async function startTheft(fixer, npc) {
@@ -397,7 +400,7 @@ export function createCrime(ctx) {
     if (!pts) { await K().say(fixer.name, ['Oggi la strada è piena di guardie. Niente corsa.'], { actor: npc }); return; }
     let len = dist2(K().poi(fixer.at) || pts[0], pts[0]);
     for (let i = 1; i < pts.length; i++) len += dist2(pts[i - 1], pts[i]);
-    job = { kind: 'race', title: '🏁 Corsa', goal: `Cerchi: 0/${pts.length}`, fixer, pts, idx: 0, time: Math.round(len / 9 + 20), countdown: 3.6, pay: 500, markers: [] };
+    job = { kind: 'race', title: '🏁 Corsa', goal: `Cerchi: 0/${pts.length}`, fixer, pts, idx: 0, time: Math.round(len / 7 + 20), countdown: 3.6, pay: 500, markers: [] };
     showRings();
     await K().say(fixer.name, [`Corsa clandestina: ${pts.length} cerchi lungo la strada, ${mmss(job.time)} di tempo.`, 'A piedi è dura: uno scooter aiuta. Pronti...'], { actor: npc, gesture: 'point', expression: 'grin' });
     ctx.bus.emit('job:start', { kind: 'race' });
@@ -461,6 +464,7 @@ export function createCrime(ctx) {
     const pp = K().playerPos(); if (!pp) return;
     let timer = null;
     if (m.kind === 'delivery') {
+      if (!m.started) return;
       m.time -= dt; timer = m.time;
       if (dist2(pp, m.target) < 3.5 && !ctx.busy.is()) {
         const contact = ctx.actors?.npc?.(m.contactId);
@@ -492,11 +496,15 @@ export function createCrime(ctx) {
         m.goal = `Cerchi: ${m.idx}/${m.pts.length}`;
       }
     }
+    // the HUD card is rebuilt (with its pop-in) only when the text changes; the timer is read live by the HUD
     hudAcc += dt;
     if (hudAcc > 0.25) {
       hudAcc = 0;
-      setMission({ title: m.title, goal: m.goal, timer: timer == null ? '' : mmss(Math.max(0, timer)), urgent: timer != null && timer < 15,
-        dist: m.target && !(m.kind === 'theft' && m.grabbed) ? Math.round(dist2(pp, m.target)) : null });
+      const sig = `${m.title}|${m.goal}|${timer != null}`;
+      if (sig !== m.hudSig) {
+        m.hudSig = sig;
+        setMission({ title: m.title, goal: m.goal, timer: timer == null ? null : () => Math.max(0, job === m ? m.time : 0) });
+      }
     }
   }
 

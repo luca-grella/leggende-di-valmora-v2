@@ -9,7 +9,8 @@ import { stepper } from '../widgets.js';
 
 export function render(ctx, root, data = {}) {
   const town = data.townId || ctx.world?.area || 'alba';
-  if (data._title) data._title.textContent = data.title || `Bottega · ${ctx.world?.areaDef?.(town)?.name || 'Valmora'}`;
+  const townName = ctx.world?.areaDef?.(town)?.name || '';
+  if (data._title) data._title.textContent = data.title || 'Bottega';
   const wallet = el('span.num', coins(ctx).toLocaleString('it-IT'));
   data._head?.append(el('div.shop-wallet', el('span', { html: icon('coin') }), wallet));
 
@@ -17,15 +18,15 @@ export function render(ctx, root, data = {}) {
   if (!stock.length) stock = Object.entries(ctx.story?.items || {}).filter(([, it]) => !it.key && it.price).map(([id, it]) => ({ id, price: it.price }));
   if (!stock.length) { root.append(empty('cart', 'Scaffali vuoti', 'Torna più tardi!')); return; }
 
-  const clerk = el('div.shop-clerk', el('span.sc-ic', { html: icon('cart') }), el('div.sc-bubble', 'Benvenuto! Cosa ti serve oggi?'));
+  const clerk = el('div.shop-clerk', el('span.sc-ic', { html: icon('cart') }), el('div.sc-bubble', townName ? `Benvenuto alla Bottega di ${townName}! Cosa ti serve oggi?` : 'Benvenuto! Cosa ti serve oggi?'));
   const list = el('div.shop-list');
   stock.forEach((r, i) => {
     const it = itemDef(ctx, r.id);
     const owned = ctx.story?.bag?.count?.(r.id) ?? 0;
     const price = r.price ?? it.price ?? 0;
     const total = el('span.num', price.toLocaleString('it-IT'));
-    const st = stepper(1, { min: 1, max: 99, onChange: n => { total.textContent = (n * price).toLocaleString('it-IT'); buy.classList.toggle('disabled', n * price > coins(ctx)); } });
     const buy = el('button.btn.small.sun.shop-buy', { type: 'button' }, el('span', { html: icon('coin') }), total);
+    const st = stepper(1, { min: 1, max: 99, onChange: n => { total.textContent = (n * price).toLocaleString('it-IT'); buy.classList.toggle('disabled', n * price > coins(ctx)); } });
     const ic = it.ball ? (it.ball > 1 ? 'mega' : 'ball') : (it.icon || 'bag');
     const row = el('div.shop-item', el('span.si-ic', { html: icon(ic) }),
       el('div.si-body', el('div.si-top', el('span.si-name', it.name || r.id), el('span.si-price', el('span', { html: icon('coin') }), price.toLocaleString('it-IT'))),
@@ -42,15 +43,17 @@ export function render(ctx, root, data = {}) {
         countTo(wallet, coins(ctx));
         row.querySelector('.si-own').textContent = `Nello zaino: ${ctx.story?.bag?.count?.(r.id) ?? owned + n}`;
         row.classList.remove('bought'); void row.offsetWidth; row.classList.add('bought');
-        list.querySelectorAll('.shop-buy').forEach(b => { const p = +b.dataset.total || 0; void p; });
+        refreshAffordable();
       } else {
         clerk.querySelector('.sc-bubble').textContent = 'Mi spiace, non hai abbastanza monete…';
         row.classList.remove('nope'); void row.offsetWidth; row.classList.add('nope');
         ctx.haptic?.(30);
       }
     });
+    row._check = () => buy.classList.toggle('disabled', st.value * price > coins(ctx));
     list.append(row);
   });
+  function refreshAffordable() { for (const r of list.children) r._check?.(); }
   root.append(clerk, list);
   return { noAutoRefresh: true };
 }

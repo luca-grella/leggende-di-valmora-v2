@@ -38,8 +38,8 @@ export function render(ctx, root, data = {}) {
     inp.addEventListener('change', () => { set(key, +inp.value); ctx.audio?.sfx?.('ui_tap'); });
     return el('div.st-row', el('span.st-ic', { html: icon(ic) }), el('div.st-body', el('div.st-title', label), inp), out);
   };
-  const music = slider('music', 'Musica', 'sparkle', x => { s.music = x; ctx.audio?.setVolumes?.({ music: x }); });
-  const sfx = slider('sfx', 'Effetti sonori', 'talk', x => { s.sfx = x; ctx.audio?.setVolumes?.({ sfx: x }); });
+  const music = slider('music', 'Musica', 'music', x => { s.music = x; ctx.audio?.setVolumes?.({ music: x }); });
+  const sfx = slider('sfx', 'Effetti sonori', 'sound', x => { s.sfx = x; ctx.audio?.setVolumes?.({ sfx: x }); });
 
   // ── quality ──
   const Q = [['auto', 'Auto'], ['low', 'Bassa'], ['mid', 'Media'], ['high', 'Alta']];
@@ -55,7 +55,7 @@ export function render(ctx, root, data = {}) {
   }));
   const tierNote = () => `In uso: ${({ low: 'bassa', mid: 'media', high: 'alta' })[ctx.quality?.tier] || '—'}`;
   const qNote = el('div.st-sub', tierNote());
-  const quality = el('div.st-row.col', el('div.st-line', el('span.st-ic', { html: icon('sparkle') }), el('div.st-body', el('div.st-title', 'Qualità grafica'), qNote)), seg);
+  const quality = el('div.st-row.col', el('div.st-line', el('span.st-ic', { html: icon('quality') }), el('div.st-body', el('div.st-title', 'Qualità grafica'), qNote)), seg);
 
   // ── toggles ──
   const tg = (key, label, sub, ic) => el('div.st-row', el('span.st-ic', { html: icon(ic) }), el('div.st-body', el('div.st-title', label), sub ? el('div.st-sub', sub) : null),

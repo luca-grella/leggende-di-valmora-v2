@@ -32,7 +32,7 @@ export function render(ctx, root, data = {}) {
 
   const vit = el('div.sm-vit',
     el('div.sm-row', el('span.sm-l', 'PS'), hpBar(inf.hpFrac), el('span.sm-v.num', `${inf.hp}/${inf.maxHp}`)),
-    el('div.sm-row', el('span.sm-l', 'Esp.'), hpBar(inf.xpFrac, { xp: true }), el('span.sm-v.num', inf.level >= 100 ? 'MAX' : `−${inf.xpToNext.toLocaleString('it-IT')}`)));
+    el('div.sm-row', el('span.sm-l', 'Esp.'), hpBar(inf.xpFrac, { xp: true }), el('span.sm-v.num', inf.level >= 100 ? 'MAX' : `${inf.xpToNext.toLocaleString('it-IT')} al Lv ${inf.level + 1}`)));
 
   const STATS = [['Attacco', 'atk', '#ff6a4d'], ['Difesa', 'def', '#2bb7c9'], ['Velocità', 'spd', '#7dcb4c']];
   const stats = el('div.sm-stats', STATS.map(([lbl, k, col]) => {

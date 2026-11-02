@@ -229,7 +229,7 @@ function setup(ctx, p, smooth) {
       break;
     }
     case 'kiss': {
-      put(a, at(-0.19, 0), f); put(b, at(0.19, 0), back);
+      put(a, at(-0.21, 0), f); put(b, at(0.21, 0), back);
       clip(a, 'kiss_lean'); clip(b, 'kiss_receive');
       a.setHandTarget('L', side(b, 'spine', 0.02, -1, 0.12), { fade });
       a.setHandTarget('R', side(b, 'spine', 0.02, 1, 0.12), { fade });
@@ -321,7 +321,7 @@ function setup(ctx, p, smooth) {
       clip(a, 'lie_back'); clip(b, 'lie_back');
       look(a, b); look(b, a); expr(a, 'smile'); expr(b, 'blush');
       const blanket = buildBlanket(ctx, { w: 1.5, l: 1.65, bodies: [-0.3, 0.3] });
-      const c = at(-0.36, 0);
+      const c = at(-0.46, 0);
       blanket.position.set(c.x, y, c.z); blanket.rotation.y = f;
       ctx.scene.add(blanket); p.props.push(blanket);
       break;
@@ -409,10 +409,10 @@ function buildBlanket(ctx, { w = 1.5, l = 1.65, bodies = [-0.3, 0.3] } = {}) {
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i), z = pos.getZ(i);
     // body bumps + drape over the bed edges + a soft roll at the top (folded sheet)
-    let y = 0.1;
-    for (const bx of bodies) y += 0.11 * Math.exp(-((x - bx) ** 2) / 0.03) * (0.75 + 0.25 * Math.exp(-((z - 0.35) ** 2) / 0.2));
+    let y = 0.2;
+    for (const bx of bodies) y += 0.12 * Math.exp(-((x - bx) ** 2) / 0.04) * (0.7 + 0.3 * Math.exp(-((z - 0.35) ** 2) / 0.2));
     const edge = Math.max(0, Math.abs(x) - w / 2);
-    y -= edge * 1.6;
+    y -= Math.min(0.5, edge * 1.8);
     const top = l / 2 - z;
     if (top < 0.12) y += 0.03 * Math.sin((top / 0.12) * Math.PI);
     y += 0.008 * Math.sin(x * 11) * Math.sin(z * 9);

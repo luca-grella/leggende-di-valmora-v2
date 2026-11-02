@@ -160,6 +160,25 @@ export function createKit(ctx) {
       ctx.story?.dialogue?.invalidate?.();
       try { return ctx.cameraRig?.shot?.({ position: new THREE.Vector3(position.x, position.y, position.z), target: new THREE.Vector3(target.x, target.y, target.z), fov }, { dur, ease }) || Promise.resolve(); } catch (e) { console.warn('[story] shot', e); return Promise.resolve(); }
     },
+    /**
+     * Frame a subject box (width across the view, height) from a horizontal direction `dir` (unit, subject → camera)
+     * and an elevation, fitting both portrait and landscape screens; widens the FOV instead of backing out past
+     * `maxDist` (small rooms). Returns the shot promise.
+     */
+    frame(center, dir, { width = 1.5, height = 1.2, elev = 20, fov = 36, maxDist = 99, dur = 0.8, ease = 'inOut' } = {}) {
+      const aspect = ctx.viewport?.aspect || (innerWidth / Math.max(1, innerHeight));
+      const e = (elev * Math.PI) / 180;
+      let f = fov, d = 0;
+      for (let i = 0; i < 12; i++) {
+        const vf = (f * Math.PI) / 180, hf = 2 * Math.atan(Math.tan(vf / 2) * aspect);
+        d = 1.12 * Math.max((width / 2) / Math.tan(hf / 2), (height / 2) / Math.tan(vf / 2));
+        if (d <= maxDist || f >= 64) break;
+        f += 4;
+      }
+      d = Math.min(d, Math.max(maxDist, 1));
+      const pos = { x: center.x + dir.x * Math.cos(e) * d, y: center.y + Math.sin(e) * d, z: center.z + dir.z * Math.cos(e) * d };
+      return K.shot(pos, center, { fov: f, dur, ease });
+    },
     /** A Velmon model from the creatures area (null when not available). */
     velmon(species, opts) { try { return ctx.creatures?.createModel?.(species, opts) || null; } catch (e) { console.warn('[story] createModel', species, e); return null; } },
     /** Human of an Npc or a Human. */

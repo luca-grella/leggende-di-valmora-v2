@@ -69,7 +69,7 @@ export class Human {
     const built = buildHuman(ctx, L);
     const prev = this.animator ? { name: this.animator.current, upper: this.animator.upperName } : null;
     if (this.model) { this.object.remove(this.model); this._disposeBuilt(); }
-    this.built = built; this.look = L; this.model = built.model; this.bones = built.bones; this.spec = built.spec; this.face = built.face;
+    this.built = built; this.look = L; this.model = built.model; this.bones = built.bones; this.spec = built.spec; this.faceCtl = built.face;
     this.mesh = built.mesh; this.outline = built.outline; this.skeleton = built.skeleton; this.meshes = built.meshes;
     this.height = built.height;
     this.object.add(this.model);
@@ -189,12 +189,12 @@ export class Human {
   get lookTarget() { return this._lookTarget; }
 
   /** Facial expression (see EXPRESSIONS), eased over dur seconds. */
-  setExpression(name, { dur = 0.2 } = {}) { this.face.set(name, { dur }); }
-  get expression() { return this.face.expression; }
+  setExpression(name, { dur = 0.2 } = {}) { this.faceCtl.set(name, { dur }); }
+  get expression() { return this.faceCtl.expression; }
 
   /** Mouth chatter on/off. While talking and standing still, gentle hand gestures play on the upper body. */
   talk(on, { gesture = true } = {}) {
-    this.face.talk(!!on);
+    this.faceCtl.talk(!!on);
     const A = this.animator;
     if (on && gesture && !A.upperName && !this._carry && (A.current === 'locomotion' || SEATED.has(A.current))) {
       this._talkGesture = true;
@@ -322,7 +322,7 @@ export class Human {
       cam.getWorldPosition(_cam);
       const d2 = _cam.distanceToSquared(this.object.getWorldPosition(_p));
       // outlines only near the camera (they double the triangles and vanish at distance anyway)
-      this.outline.visible = (this.ctx.quality ? !!this.ctx.quality.outlines : true) && d2 < 30 * 30;
+      this.outline.visible = (this.ctx.quality ? !!this.ctx.quality.outlines : true) && d2 < 24 * 24;
       if (d2 > 34 * 34) {
         this._accum += dt;
         if ((this.ctx.loop?.frame ?? 0) % 2) return;
@@ -436,7 +436,7 @@ export class Human {
     this._handIK('L', dt); this._handIK('R', dt);
 
     // ---- face ----
-    this.face.update(dt, A.scalars, this.lookAtCtl.eyeShift);
+    this.faceCtl.update(dt, A.scalars, this.lookAtCtl.eyeShift);
 
     // ---- secondary motion ----
     for (const j of this._jig) j.update(dt);

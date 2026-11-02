@@ -110,7 +110,7 @@ export function createCenters(ctx) {
       id: `story.pc.${town}`, pos: { x: p.x, z: p.z }, radius: 1.4, label: 'Box', icon: '💻',
       run: async () => {
         K().sfx('ui_open');
-        if (ctx.ui?.sheet) { ctx.ui.sheet('box'); await K().until(() => !ctx.ui.isOpen?.(), 3600); }
+        if (ctx.ui?.sheet) { const closed = ctx.ui.sheet('box'); if (closed?.then) await closed; else await K().until(() => !ctx.ui.isOpen?.(), 3600); }
         else await K().say('', ['Il PC del Box si accende con un ronzio... (Box non disponibile)']);
       },
     }));

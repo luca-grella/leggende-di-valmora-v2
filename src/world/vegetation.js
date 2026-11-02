@@ -166,13 +166,13 @@ export function buildVegetation(ctx, island, heightAt) {
         else if (r < 0.1) addSmall('tuft', jx, jz, h, 0.7);
         continue;
       }
-      const pTree = forest > 0.18 ? 0.42 : forest > 0.0 ? 0.12 : 0.035;
+      const pTree = forest > 0.18 ? 0.42 : forest > 0.0 ? 0.14 : 0.06;
       if (r < pTree) { placeTree(pickTree(), jx, jz, 0.85 + R() * 0.45); continue; }
-      if (r < pTree + 0.06) { const b = setFor('bush', R() < 0.35 ? 1 : 0); b.add({ x: jx, y: h - 0.08, z: jz, ry: R() * 6, s: 0.8 + R() * 0.6, color: tint(null, 0.1) }); continue; }
-      if (r < pTree + 0.08) { rock(jx, jz, h); continue; }
+      if (r < pTree + 0.1) { const b = setFor('bush', R() < 0.35 ? 1 : 0); b.add({ x: jx, y: h - 0.08, z: jz, ry: R() * 6, s: 0.8 + R() * 0.6, color: tint(null, 0.1) }); continue; }
+      if (r < pTree + 0.12) { rock(jx, jz, h); continue; }
       // flower meadows and tufts
       const fl = N2.noise2(jx * 0.03, jz * 0.03);
-      if (fl > 0.35 && R() < dens) { for (let k = 0; k < 3; k++) flower(jx + (R() - 0.5) * 3, jz + (R() - 0.5) * 3); continue; }
+      if (fl > 0.2 && R() < dens) { for (let k = 0; k < 4; k++) flower(jx + (R() - 0.5) * 3, jz + (R() - 0.5) * 3); continue; }
       if (R() < 0.55 * dens) addSmall(C.snow ? 'tuft' : id === 'nebbia' && R() < 0.5 ? 'heather' : 'tuft', jx, jz, h, 0.8 + R() * 0.5);
     } else if (o === OCC.ROAD || o === OCC.BUSY) {
       if (R() < 0.12 * dens && occ.at(jx, jz) === OCC.ROAD && !occ.clearOf(jx, jz, 0, OCC.ROAD)) { /* keep roads clean */ }

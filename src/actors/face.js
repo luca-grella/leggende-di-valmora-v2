@@ -9,11 +9,12 @@ import { ellipsoid, tube, col, mix, sstep } from './geo.js';
 export const EXPRESSIONS = ['neutral', 'smile', 'grin', 'laugh', 'blush', 'shy', 'surprised', 'sad', 'angry', 'wink', 'closed', 'kiss', 'sleepy', 'smug'];
 
 /** Parts that never get an outline shell. */
-export const FACE_PARTS = new Set(['eyes', 'lids', 'brows', 'mouth', 'blush', 'freckles', 'nose']);
+/** (bangs and face-framing locks too: their thin tips would get spiky dark outline marks) */
+export const FACE_PARTS = new Set(['eyes', 'lids', 'brows', 'mouth', 'blush', 'freckles', 'nose', 'bangs']);
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 /** Eye geometry metrics (multiplied by spec.hr). */
-export const EYE = { w: 0.029, h: 0.04 };
+export const EYE = { w: 0.032, h: 0.045 };
 
 /** Surface normal of the head ellipsoid at p (model space). */
 function headNormal(spec, p) {

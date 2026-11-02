@@ -11,9 +11,13 @@ export function thumb(ctx, speciesId, { size = 96, silhouette = false, cls = '' 
   const key = speciesId + '@' + size;
   const put = url => {
     if (!url) return;
-    const img = el('img', { src: url, alt: '', draggable: 'false' });
-    img.onload = () => box.classList.add('ok');
-    box.replaceChildren(img);
+    const img = el('img', { alt: '', draggable: 'false' });
+    const ok = () => { box.classList.add('ok'); box.querySelector('.th-ph')?.remove(); };
+    img.onload = ok;
+    img.onerror = () => img.remove();
+    img.src = url;
+    box.append(img);
+    if (img.complete && img.naturalWidth) ok();
   };
   if (thumbCache.has(key)) put(thumbCache.get(key));
   else {

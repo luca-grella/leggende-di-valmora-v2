@@ -72,7 +72,7 @@ export function createDialogue(ctx) {
     if (!human) return;
     try {
       if (expression) human.setExpression?.(expression, { dur: 0.25 });
-      if (gesture && GESTURES.has(gesture)) human.play?.(gesture, { loop: false, fade: 0.25 })?.then?.(() => human.play?.('idle', { fade: 0.35 }));
+      if (gesture && GESTURES.has(gesture)) human.play?.(gesture, { loop: false, fade: 0.25 });   // one-shot gestures end by themselves (actors)
     } catch (e) { console.warn('[dialogue] act', e); }
   }
 

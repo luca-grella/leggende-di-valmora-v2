@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { SPECIES } from '../creatures/species.js';
 import { maxHp } from '../creatures/monster.js';
 import { buildSphere } from '../creatures/sphere.js';
-import { wait, tween, during, groundAt } from './util.js';
+import { wait, tween, during, groundAt, withTimeout } from './util.js';
 
 export const BALL_MULT = { sfera: 1, megasfera: 1.5 };
 
@@ -29,6 +29,28 @@ function handPos(run, out) {
 }
 
 /**
+ * The player's throw: with Actors' player.throwBall the ball rides the right hand until the release frame; otherwise
+ * the human plays the clip and the ball starts at the hand height. Resolves with the ball's world start position.
+ */
+export async function playerThrow(ctx, run, sphere) {
+  const pl = ctx.player, S = sphere.object;
+  const from = new THREE.Vector3();
+  if (pl?.throwBall && !pl.placeholder && run.playerObj === pl.object) {
+    try {
+      await withTimeout(ctx, pl.throwBall(S), 1.6, null);
+      if (S.parent !== ctx.scene) { S.getWorldPosition(from); ctx.scene.add(S); S.position.copy(from); }
+      S.getWorldPosition(from);
+      S.rotation.set(0, 0, 0);
+      return from;
+    } catch (e) { console.warn('[battle] throwBall', e); }
+  }
+  const human = run.playerHuman;
+  human?.play?.('throw_ball', { loop: false, fade: 0.15 });
+  await wait(ctx, human ? 0.42 : 0.15);
+  return handPos(run, from);
+}
+
+/**
  * Throw a capture ball at run.foeModel. Returns true when the Velmon is caught. The ball (on the ground) is left
  * in run.caughtBall when caught; the battle disposes it.
  */
@@ -42,12 +64,9 @@ export async function throwBall(ctx, run, ballKind = 'sfera', rnd = Math.random)
   const fx = run.fx;
 
   // 1. throw
-  const human = run.playerHuman;
   run.cam?.('battle_wide');
-  const clip = human?.play?.('throw_ball', { loop: false, fade: 0.15 });
-  await wait(ctx, human ? 0.42 : 0.15);
+  const from = await playerThrow(ctx, run, sphere);
   ctx.audio?.sfx?.('ball_throw');
-  const from = handPos(run, new THREE.Vector3());
   const fp = foeObj.position;
   const h = foeM.height || 0.8;
   const hover = new THREE.Vector3(fp.x, fp.y + Math.max(0.9, h * 0.95) + 0.15, fp.z)
@@ -59,7 +78,6 @@ export async function throwBall(ctx, run, ballKind = 'sfera', rnd = Math.random)
     S.position.lerpVectors(from, hover, k);
     S.position.y += Math.sin(k * Math.PI) * 1.5;
   }, 'linear');
-  clip?.then?.(() => human?.play?.('idle', { fade: 0.3 }));
 
   // 2. hit, bounce back up a little, open and absorb
   ctx.audio?.sfx?.('hit_weak', { vol: 0.6 });

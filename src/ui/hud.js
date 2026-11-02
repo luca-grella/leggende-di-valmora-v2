@@ -43,7 +43,7 @@ export function createHud(ctx, root) {
   let teamTapTimer = 0, teamTaps = 0;
   teamEl.addEventListener('pointerup', () => {
     teamTaps++; clearTimeout(teamTapTimer);
-    teamTapTimer = setTimeout(() => { if (teamTaps === 1 && !ctx.busy.is()) ctx.ui?.sheet('team'); teamTaps = 0; }, 620);
+    teamTapTimer = setTimeout(() => { if (teamTaps === 1 && !ctx.busy.is()) ctx.ui?.sheet('team'); teamTaps = 0; }, 820);
   });
 
   // ── state ──

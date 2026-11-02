@@ -213,7 +213,7 @@ export async function init(ctx) {
     S.group.removeFromParent();
     hf.drop(S.id);
     Object.assign(S, { built: false, group: null, veg: null, grass: null, ids: [], regs: [], gates: [], terrain: null, waterTex: null });
-    if (S.silhouette) S.silhouette.visible = true;
+    if (S.silhouette) S.silhouette.visible = true; else silPending = true;
   }
 
   function finishJob(S) { if (!S.built) { if (!S.job) S.job = islandBuilder(S); let r; do { r = S.job.next(); } while (!r.done); S.job = null; } }
@@ -637,11 +637,11 @@ export async function init(ctx) {
   // ------------------------------------------------------------------------------------------------
   // Loop
   // ------------------------------------------------------------------------------------------------
-  let lightK = -1;
+  let lightK = -1, silPending = true;
   const indoor = { background: '#2a1e1c', fog: '#2a1e1c', fogNear: 30, fogFar: 80, sun: '#fff1dc', sunIntensity: 1.7, sunDir: { x: 0.25, y: 1, z: 0.55 }, hemiSky: '#fff4e6', hemiGround: '#a88a6a', hemiIntensity: 1.25, hideSky: true };
   function caveLight(cid) {
     const K = pockets.cave?.built?.color || {};
-    return { background: '#120c1c', fog: '#140e22', fogNear: 18, fogFar: 60, sun: '#b8a8ff', sunIntensity: 0.9, sunDir: { x: 0.2, y: 1, z: 0.4 }, hemiSky: K.glow || '#8a7ad0', hemiGround: '#2a2040', hemiIntensity: 1.1, hideSky: true, cid };
+    return { background: '#120c1c', fog: '#140e22', fogNear: 18, fogFar: 60, sun: '#c8b8ff', sunIntensity: 1.25, sunDir: { x: 0.2, y: 1, z: 0.4 }, hemiSky: K.glow || '#8a7ad0', hemiGround: '#3a3058', hemiIntensity: 1.35, hideSky: true, cid };
   }
   function tick(dt, t) {
     WIND.uTime.value = t;
@@ -681,7 +681,7 @@ export async function init(ctx) {
       S.veg.update(dt, t); S.grass.update(dt, t);
       if (S.pools) { S.pools.userData.mat.opacity = smoothstep(0.15, 0.9, lamps) * 0.9; S.pools.visible = lamps > 0.12; }
     }
-    if (!pocket) { const miss = [...islands.values()].find(S => !S.silhouette && !S.built); if (miss) { miss.silhouette = buildSilhouette(miss); root.add(miss.silhouette); } }
+    if (!pocket && silPending) { silPending = false; for (const S of islands.values()) if (!S.silhouette && !S.built) { S.silhouette = buildSilhouette(S); root.add(S.silhouette); silPending = true; break; } }
     for (const S of islands.values()) if (S.silhouette) S.silhouette.visible = !S.built && !pocket;
     // lighting
     const inCave = !!pockets.cave && pocket && caveAt(fx, fz);

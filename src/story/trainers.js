@@ -106,6 +106,7 @@ export function createTrainers(ctx) {
   /** Line-of-sight between two points (clear when the world exposes no collider query). */
   function clearLine(a, b) {
     const cols = ctx.world?.colliders;
+    if (typeof cols?.segmentBlocked === 'function') { try { return !cols.segmentBlocked(a.x, a.z, b.x, b.z); } catch { return true; } }
     const blocked = typeof cols?.blocked === 'function' ? (x, z) => cols.blocked(x, z, 0.05) : null;
     if (!blocked) return true;
     const d = dist2(a, b), n = Math.floor(d / 1.2);
@@ -171,7 +172,7 @@ export function createTrainers(ctx) {
       if (result === 'win') {
         tr.markBeaten(t.id);
         const reward = typeof t.reward === 'function' ? t.reward(ctx) : t.reward;
-        if (reward) { ctx.story.economy.earn(reward, 'trainer:' + t.id); K().toast(`Hai ricevuto 💰 ${reward}!`, { icon: '💰' }); }
+        if (reward) { ctx.story.economy.earn(reward, 'trainer:' + t.id); K().toast(`Hai ricevuto ${reward} monete!`, { icon: '💰' }); }
         if (t.champion) {
           ctx.flags.set('champion_' + t.town, true);
           K().banner(`Nuovo Campione di ${TOWN_NAMES[t.town]}!`, `Hai battuto ${t.name}`);
@@ -209,7 +210,7 @@ export function createTrainers(ctx) {
   for (const t of TRAINERS) {
     ctx.story.npcs.define({
       id: t.id, name: t.name, look: t.look, at: t.poi, kind: t.champion ? 'champion' : 'trainer', wander: null,
-      label: tr.beaten(t.id) ? 'Parla' : 'Sfida', icon: t.champion ? '🏆' : '⚔️',
+      label: () => (tr.beaten(t.id) ? 'Parla' : 'Sfida'), icon: t.champion ? '🏆' : '⚔️',
       marker: () => (t.champion && !tr.beaten(t.id) ? '★' : null),
       talk: async (c, npc) => {
         if (tr.beaten(t.id)) { faceEach(npc); await K().say(t.name, t.afterBeaten || t.after, { actor: npc, expression: 'smile', gesture: 'wave' }); return; }

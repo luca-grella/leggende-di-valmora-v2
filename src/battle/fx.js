@@ -58,8 +58,8 @@ export function createFx(ctx) {
       p: new THREE.Vector3().copy(o.p), v: new THREE.Vector3().copy(o.v || _v.set(0, 0, 0)), g: o.g || 0, drag: o.drag || 0,
       life: o.life || 1, age: -(o.delay || 0), s0: o.s0 ?? 0.1, s1: o.s1 ?? 0, sx: o.sx ?? 1, sy: o.sy ?? 1, sz: o.sz ?? 1,
       c0: new THREE.Color(o.c0 || '#ffffff'), c1: new THREE.Color(o.c1 || o.c0 || '#ffffff'),
-      rot: new THREE.Euler(...(o.rot || [rnd(0, 6), rnd(0, 6), rnd(0, 6)])), spin: o.spin || [0, 0, 0],
-      align: !!o.align, stretch: o.stretch || 0, home: o.home || null, ease: o.ease || 'out', wob: o.wob || 0, seed: Math.random() * 10,
+      rot: new THREE.Euler(...(o.rot || (shape === 'ring' ? [0, 0, 0] : [rnd(0, 6), rnd(0, 6), rnd(0, 6)]))), spin: o.spin || [0, 0, 0],
+      align: !!o.align, flip: !!o.flip, stretch: o.stretch || 0, home: o.home || null, ease: o.ease || 'out', wob: o.wob || 0, seed: Math.random() * 10,
     };
     P.list.push(p);
     return p;
@@ -97,7 +97,7 @@ export function createFx(ctx) {
         const t = clamp01(p.age / p.life);
         const e = p.ease === 'pop' ? Math.sin(Math.min(1, t * 1.15) * Math.PI) : p.ease === 'in' ? t * t : 1 - (1 - t) * (1 - t);
         const sc = p.ease === 'pop' ? p.s0 * e + p.s1 * t : p.s0 + (p.s1 - p.s0) * e;
-        if (p.align && p.v.lengthSq() > 1e-6) _q.setFromUnitVectors(UP, _v.copy(p.v).normalize()).multiply(_tmpQ.setFromAxisAngle(UP, p.rot.y));
+        if (p.align && p.v.lengthSq() > 1e-6) { _v.copy(p.v).normalize(); if (p.flip) _v.negate(); _q.setFromUnitVectors(UP, _v).multiply(_tmpQ.setFromAxisAngle(UP, p.rot.y)); }
         else _q.setFromEuler(p.rot);
         const st = 1 + p.stretch * p.v.length();
         _s.set(sc * p.sx, sc * p.sy * st, sc * p.sz);
@@ -168,13 +168,14 @@ export function createFx(ctx) {
     },
     async fire(from, to) {
       const F = frame(from, to); const T = 0.42;
-      for (let i = 0; i < 26; i++) {
-        const delay = (i / 26) * 0.32;
-        const spread = new THREE.Vector3(rnd(-0.6, 0.6), rnd(-0.3, 0.5), rnd(-0.6, 0.6));
-        spawn('flame', { p: F.a, v: F.d.clone().multiplyScalar(F.dist / T).add(spread), delay, life: T + 0.05, s0: rnd(0.16, 0.24), s1: rnd(0.3, 0.42), c0: '#ffe46b', c1: '#ff5a1a', align: true, stretch: 0.03, ease: 'out' });
+      for (let i = 0; i < 34; i++) {
+        const delay = (i / 34) * 0.32;
+        const spread = new THREE.Vector3(rnd(-0.5, 0.5), rnd(-0.25, 0.45), rnd(-0.5, 0.5));
+        const core = i % 3 === 0;
+        spawn('flame', { p: F.a, v: F.d.clone().multiplyScalar(F.dist / T).add(spread), delay, life: T + 0.06, s0: core ? 0.12 : 0.18, s1: core ? 0.16 : rnd(0.28, 0.36), sx: 0.75, sz: 0.75, sy: 1.25, c0: core ? '#ffffff' : '#ffe46b', c1: core ? '#ffd23f' : '#ff4a12', align: true, flip: true, stretch: 0.025, ease: 'out', rot: [0, rnd(0, 6), 0] });
       }
       await wait(T + 0.12);
-      for (let i = 0; i < 16; i++) spawn('flame', { p: tmpA.copy(F.b).add(tmpB.set(rnd(-0.3, 0.3), rnd(-0.4, 0.1), rnd(-0.3, 0.3))), v: new THREE.Vector3(rnd(-1, 1), rnd(1.6, 3.2), rnd(-1, 1)), drag: 1.5, life: rnd(0.45, 0.7), s0: rnd(0.25, 0.4), s1: 0.02, c0: '#fff2a0', c1: '#ff4a10', align: true, ease: 'in' });
+      for (let i = 0; i < 20; i++) spawn('flame', { p: tmpA.copy(F.b).add(tmpB.set(rnd(-0.35, 0.35), rnd(-0.45, 0.05), rnd(-0.35, 0.35))), v: new THREE.Vector3(rnd(-0.6, 0.6), rnd(1.4, 2.8), rnd(-0.6, 0.6)), drag: 1.2, life: rnd(0.45, 0.75), s0: rnd(0.26, 0.4), s1: 0.02, sx: 0.7, sz: 0.7, sy: 1.3, c0: i % 4 ? '#ffd86b' : '#ffffff', c1: '#ff3d10', align: true, ease: 'in', rot: [0, rnd(0, 6), 0] });
       spawn('ring', { p: F.b, life: 0.35, s0: 0.3, s1: 1.8, c0: '#ffd36b', c1: '#ff6a1a' });
     },
     async water(from, to) {
@@ -345,8 +346,8 @@ export function createFx(ctx) {
       const b = centre(at, new THREE.Vector3(), 0.5);
       const h = sizeOf(at);
       for (let i = 0; i < 26; i++) {
-        const a = rnd(0, Math.PI * 2), r = rnd(1.4, 2.2) * Math.max(0.8, h);
-        spawn('orb', { p: tmpA.set(b.x + Math.cos(a) * r, b.y + rnd(-0.8, 1.2), b.z + Math.sin(a) * r), v: new THREE.Vector3(-Math.sin(a) * 2, 0, Math.cos(a) * 2), home: { to: b, k: 3, turn: 2.5 }, delay: rnd(0, 0.6), life: 0.9, s0: 0.1, s1: 0.02, c0: '#ffffff', c1: '#bfe8ff', align: true, stretch: 0.1 });
+        const a = rnd(0, Math.PI * 2), r = rnd(0.8, 1.3) * Math.max(0.7, h);
+        spawn('orb', { p: tmpA.set(b.x + Math.cos(a) * r, b.y + rnd(-0.5, 0.8) * h, b.z + Math.sin(a) * r), v: new THREE.Vector3(-Math.sin(a) * 1.6, 0.3, Math.cos(a) * 1.6), home: { to: b, k: 2.6, turn: 2.5 }, delay: rnd(0, 0.6), life: 0.85, s0: 0.06, s1: 0.015, c0: '#ffffff', c1: '#bfe8ff', align: true, stretch: 0.12 });
       }
       return Promise.resolve();
     },

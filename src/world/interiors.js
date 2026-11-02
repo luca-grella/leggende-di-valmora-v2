@@ -158,7 +158,7 @@ function furniture(b, f, I, R, C) {
       break;
     case 'labtable':
       b.box(3.2, 0.95, 1.2, 0, 0.47, 0, '#e8eef6', { round: 0.08 }); b.box(3.3, 0.08, 1.3, 0, 0.98, 0, '#2fa8a0', { round: 0.04 });
-      for (let k = 0; k < 3; k++) { b.cyl(0.12, 0.15, 0.1, -0.8 + k * 0.8, 1.07, 0, '#c8c8d0', { seg: 10 }); b.sphere(0.2, -0.8 + k * 0.8, 1.32, 0, ['#e8474a', '#ffffff', '#3fa6d9'][k], { grad: 0.1 }); b.box(0.42, 0.04, 0.03, -0.8 + k * 0.8, 1.32, 0.18, '#2a2140'); }
+      for (let k = 0; k < 3; k++) { b.cyl(0.12, 0.15, 0.1, -0.8 + k * 0.8, 1.07, 0, '#c8c8d0', { seg: 10 }); if (f.empty) continue; b.sphere(0.2, -0.8 + k * 0.8, 1.32, 0, ['#e8474a', '#ffffff', '#3fa6d9'][k], { grad: 0.1 }); b.box(0.42, 0.04, 0.03, -0.8 + k * 0.8, 1.32, 0.18, '#2a2140'); }
       out.push([0, 0, 1.6, 0.6]);
       break;
     case 'machine':
@@ -259,7 +259,9 @@ export function buildInterior(ctx, def, mats) {
   for (const s of [-1, 1]) colliders.push({ type: 'box', x: ox + s * (hw + 0.25), z: oz, hw: 0.3, hd: hd + 0.5, rot: 0 });
   for (const s of [-1, 1]) colliders.push({ type: 'box', x: ox + s * (gap / 2 + (hw - gap / 2) / 2 + 0.2), z: oz + hd + 0.15, hw: (hw - gap / 2) / 2 + 0.3, hd: 0.25, rot: 0 });
   colliders.push({ type: 'box', x: ox, z: oz + hd + 1.4, hw: gap, hd: 0.3, rot: 0 });   // beyond the door gap (exit is an action)
-  for (const f of I.furniture) colliders.push(...furniture(b, f, I, R, T));
+  // the three display Sfere on the lab table are gone once the starter has been chosen
+  const emptyLab = !!ctx.flags?.has?.('starter_chosen');
+  for (const f of I.furniture) colliders.push(...furniture(b, f.type === 'labtable' && emptyLab ? { ...f, empty: true } : f, I, R, T));
   const object = b.build((mats || ctx.worldMats).forBuilder(), { name: 'interior:' + I.id });
   object.traverse(o => { if (o.isMesh) o.castShadow = false; });
   return {

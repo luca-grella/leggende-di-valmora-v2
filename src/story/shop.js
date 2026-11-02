@@ -35,9 +35,9 @@ export function createShop(ctx) {
       const data = { townId: town, townName: TOWN_NAMES[town] || '', stock: shop.stock(town), buy: (id, n) => shop.buy(id, n), coins: () => ctx.story.economy.coins };
       if (ctx.ui?.sheet) {
         K().sfx('ui_open');
-        ctx.ui.sheet('shop', data);
-        await K().wait(0.05);
-        await K().until(() => !ctx.ui.isOpen?.(), 3600);
+        const closed = ctx.ui.sheet('shop', data);
+        if (closed?.then) await closed;
+        else { await K().wait(0.05); await K().until(() => !ctx.ui.isOpen?.(), 3600); }
         return;
       }
       await fallbackShop(data);

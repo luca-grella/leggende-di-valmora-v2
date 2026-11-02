@@ -144,7 +144,7 @@ export function createPlayer(ctx, actors) {
   function mount(v, { silent = false } = {}) {
     if (v === vehicle) return;
     if (vehicle) {
-      const old = vehicle; vehicle = null;
+      const old = vehicle; vehicle = null; speed = 0; rideSpeed = 0;
       const f = old.object.rotation.y;
       const side = { x: old.object.position.x + Math.cos(f) * 0.9, z: old.object.position.z - Math.sin(f) * 0.9 };
       const r = ctx.world?.resolveMove?.({ x: old.object.position.x, z: old.object.position.z }, side, RADIUS) || side;
@@ -223,7 +223,7 @@ export function createPlayer(ctx, actors) {
       const want = Math.atan2(m.x, m.z);
       const diff = wrap(want - facing);
       const before = facing;
-      facing += diff * (1 - Math.exp(-TURN_LAMBDA * dt));
+      facing = wrap(facing + diff * (1 - Math.exp(-TURN_LAMBDA * dt)));
       turnRate = wrap(facing - before) / Math.max(dt, 1e-4);
       const run = !!ctx.input.run;
       goal = run ? RUN * Math.min(1, m.mag / 0.7) : WALK * Math.min(1, m.mag / 0.5);

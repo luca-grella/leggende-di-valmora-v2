@@ -18,15 +18,18 @@ function statsFor(sp, level) {
   const st = v => Math.floor((v * 2 * level) / 100) + 5;
   return { hp: Math.floor((b.hp * 2 * level) / 100) + level + 10, atk: st(b.atk), def: st(b.def), spd: st(b.spd) };
 }
-const xpFor = l => l * l * l;
+const xpFor = l => l * l * l;   // same curve as creatures/monster.js xpForLevel
 
 /** Everything the UI shows about a Monster: {name, species, sp, types, level, hp, maxHp, hpFrac, xpFrac, stats, moves, fainted}. */
 export function monInfo(ctx, mon) {
   if (!mon) return null;
   const sp = speciesOf(ctx, mon.species);
   const level = mon.level || 1;
-  const stats = statsFor(sp, level);
-  const maxHp = Math.max(1, ctx.creatures?.team?.maxHp?.(mon) ?? stats.hp);
+  let stats = statsFor(sp, level);
+  try { const s = ctx.creatures?.stats?.(mon); if (s && typeof s === 'object') stats = { ...stats, ...s }; } catch { /* fallback */ }
+  let mh = null;
+  try { mh = ctx.creatures?.maxHp?.(mon) ?? ctx.creatures?.team?.maxHp?.(mon); } catch { mh = null; }
+  const maxHp = Math.max(1, +mh || stats.hp);
   const hp = Math.max(0, Math.min(maxHp, mon.hp ?? maxHp));
   const lo = xpFor(level), hi = xpFor(level + 1);
   const xpFrac = Math.max(0, Math.min(1, ((mon.xp ?? lo) - lo) / Math.max(1, hi - lo)));

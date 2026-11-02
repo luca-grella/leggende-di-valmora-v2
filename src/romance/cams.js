@@ -24,18 +24,26 @@ export function createCams(ctx) {
     return out;
   }
 
-  function go(spec, dur, drift = true) {
+  /**
+   * Glide to a shot, then a slow push-in drift. `live` (optional) is a function returning the target point
+   * every frame, so the frame follows the actors while their poses settle (sitting down, leaning in).
+   */
+  function go(spec, dur, drift = true, live = null) {
     const my = ++token;
-    const p = rig().shot(spec, { dur, ease: dur ? 'inOut' : 'cut' });
+    const p = rig().shot(live ? { ...spec, target: live } : spec, { dur, ease: dur ? 'inOut' : 'cut' });
     if (drift) p.then(() => {
       if (my !== token) return;
-      const to = new THREE.Vector3().copy(spec.position).lerp(spec.target, 0.07);
-      const side = new THREE.Vector3().subVectors(spec.target, spec.position).cross(new THREE.Vector3(0, 1, 0)).setLength(0.12);
+      const tgt = live ? live().clone() : spec.target;
+      // slow push-in of a few centimetres (capped: far targets, like the view, must not pull the camera past the couple)
+      const dir = new THREE.Vector3().subVectors(tgt, spec.position);
+      const to = new THREE.Vector3().copy(spec.position).addScaledVector(dir.normalize(), Math.min(0.18, 0.07 * spec.position.distanceTo(tgt)));
+      const side = new THREE.Vector3().subVectors(tgt, spec.position).cross(new THREE.Vector3(0, 1, 0)).setLength(0.12);
       to.add(side); to.y += 0.03;
-      rig().shot({ position: to, target: spec.target, fov: (spec.fov || 30) - 1 }, { dur: 7 });
+      rig().shot({ position: to, target: live || spec.target, fov: (spec.fov || 30) - 1 }, { dur: 7 });
     });
     return p;
   }
+  const _la = new THREE.Vector3(), _lb = new THREE.Vector3(), _lt = new THREE.Vector3();
 
   const cams = {
     headOf,
@@ -58,7 +66,8 @@ export function createCams(ctx) {
       n.multiplyScalar(sign);
       const asp = aspect(), tanH = Math.tan((fov * D2R) / 2);
       // frame height V: faces and shoulders, never below the waist (maxV)
-      const maxV = tight ? 1.05 : 1.3, margin = asp < 1 ? 0.3 : 0.42;
+      // (portrait frames are narrow: allow a little more height so close couples stay near profile)
+      const maxV = tight ? (asp < 1 ? 1.28 : 1.05) : 1.3, margin = asp < 1 ? 0.3 : 0.42;
       let V = Math.min(maxV, Math.max(tight ? 0.8 : 1.0, Math.abs(A.y - B.y) + 0.62) * (asp < 1 ? 1.08 : 1));
       // angle off the perpendicular so both heads fit side by side (0.35 = gentle three-quarter)
       let theta = 0.35;
@@ -72,13 +81,14 @@ export function createCams(ctx) {
       // too far apart for a narrow (portrait) frame: over-the-shoulder on her face instead;
       // close together (kiss, hug): a steeper three-quarter that still shows both faces
       if (theta > 1.05 && s > 0.7) return cams.over(a, b, { dur, fov: fov - 2 });
-      theta = Math.min(theta, 1.15);
+      theta = Math.min(theta, s < 0.7 ? 0.9 : 1.15);
       const d = V / (2 * tanH);
       const dir = new THREE.Vector3().copy(n).multiplyScalar(Math.cos(theta)).addScaledVector(axis, -Math.sin(theta));
       const position = new THREE.Vector3().copy(mid).addScaledVector(dir, d);
       position.y = mid.y + 0.1 + d * 0.06;
       const target = new THREE.Vector3(mid.x, mid.y - V * 0.12, mid.z);
-      return go({ position, target, fov }, dur);
+      const live = () => { headOf(a, _la); headOf(b, _lb); return _lt.addVectors(_la, _lb).multiplyScalar(0.5).setY((_la.y + _lb.y) / 2 - V * 0.12); };
+      return go({ position, target, fov }, dur, true, live);
     },
 
     /** Her face over his shoulder (good for her lines on portrait screens). */
@@ -89,10 +99,13 @@ export function createCams(ctx) {
       const sign = tmp.subVectors(ctx.camera.position, A).dot(n) >= 0 ? 1 : -1;
       // far enough to the side that his head only edges into the frame and her face stays clear
       const narrow = aspect() < 1;
-      const position = new THREE.Vector3().copy(A).addScaledVector(axis, narrow ? -1.2 : -1.05).addScaledVector(n, (narrow ? 0.8 : 0.62) * sign);
+      // (portrait: big Sun/Moon heads need a wider angle, his head just grazes the frame edge)
+      const position = new THREE.Vector3().copy(A).addScaledVector(axis, narrow ? -1.0 : -1.05).addScaledVector(n, (narrow ? 1.1 : 0.62) * sign);
       position.y = A.y + 0.12;
-      const target = new THREE.Vector3(B.x, B.y - 0.1, B.z).addScaledVector(n, -0.1 * sign);
-      return go({ position, target, fov }, dur);
+      const target = new THREE.Vector3(B.x, B.y - 0.1, B.z).addScaledVector(n, narrow ? 0 : -0.1 * sign);
+      const nn = n.clone().multiplyScalar(narrow ? 0 : -0.1 * sign);
+      const live = () => { headOf(b, _lt); _lt.y -= 0.1; return _lt.add(nn); };
+      return go({ position, target, fov }, dur, true, live);
     },
 
     /** From above the bed: two heads on the pillows, blanket up to the shoulders. */
@@ -101,11 +114,14 @@ export function createCams(ctx) {
       const c = new THREE.Vector3().addVectors(A, B).multiplyScalar(0.5);
       const foot = new THREE.Vector3(-Math.sin(facing), 0, -Math.cos(facing));
       const side = new THREE.Vector3(foot.z, 0, -foot.x);
-      const position = new THREE.Vector3().copy(c).addScaledVector(foot, 0.62).addScaledVector(side, 0.18);
-      position.y = c.y + 1.3;
+      // landscape: close, from above the blanket towards the pillows; portrait (narrow frame): higher up, so
+      // both faces fit side by side and the frame shows the cosy bed under the blanket and the candles
+      const narrow = aspect() < 1;
+      const position = new THREE.Vector3().copy(c).addScaledVector(foot, narrow ? 1.05 : 0.62).addScaledVector(side, narrow ? 0.12 : 0.18);
+      position.y = c.y + (narrow ? 2.75 : 1.3);
       const target = new THREE.Vector3().copy(c).addScaledVector(foot, 0.12);
       target.y = c.y - 0.05;
-      return go({ position, target, fov: 36 }, dur);
+      return go({ position, target, fov: narrow ? 38 : 36 }, dur);
     },
 
     /** Establishing three-quarter shot of a set (props + both, from a distance). */
@@ -118,13 +134,17 @@ export function createCams(ctx) {
 
     /** Behind the two of them, looking out at the view (sunset over the sea / the town). */
     panorama(a, b, viewYaw, { dur = 2.2 } = {}) {
+      // a narrow portrait frame cannot hold both from behind without showing them below the waist:
+      // there the faces two-shot is used (the view stays in the background)
+      if (aspect() < 1) return cams.two(a, b, { dur: Math.min(dur, 1.4) });
       const A = headOf(a), B = headOf(b);
       const mid = new THREE.Vector3().addVectors(A, B).multiplyScalar(0.5);
       const fwd = new THREE.Vector3(Math.sin(viewYaw), 0, Math.cos(viewYaw));
-      const position = new THREE.Vector3().copy(mid).addScaledVector(fwd, -2.1);
-      position.y = mid.y + 0.35;
-      const target = new THREE.Vector3().copy(mid).addScaledVector(fwd, 20); target.y = mid.y - 0.8;
-      return go({ position, target, fov: 42 }, dur);
+      // behind them, long lens: heads and shoulders in the lower frame, the view above (bottom edge ≈ waist)
+      const position = new THREE.Vector3().copy(mid).addScaledVector(fwd, -2.9);
+      position.y = mid.y + 0.12;
+      const target = new THREE.Vector3().copy(mid).addScaledVector(fwd, 20); target.y = position.y;
+      return go({ position, target, fov: 22 }, dur);
     },
 
     /** Side tracking shot that follows a moving object (scooter ride). */

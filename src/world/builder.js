@@ -3,7 +3,6 @@
 // then merged per material and per spatial cell, so a whole town costs a handful of draw calls.
 // A soft contact darkening near the ground is baked into the vertex colours (cheap fake AO).
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { rng, clamp, smoothstep, lerp } from '../core/math.js';
 
 const CELL = 48;
@@ -161,7 +160,8 @@ export class Builder {
   }
 
   box(w, h, d, x, y, z, color, t = {}) {
-    const r = Math.min(t.round ?? 0, w * 0.45, h * 0.45, d * 0.45);
+    // small parts stay plain boxes (12 triangles instead of 108): the bevel would not read anyway
+    const r = Math.min(w, h, d) < 0.16 && Math.max(w, h, d) < 1.2 ? 0 : Math.min(t.round ?? 0, w * 0.45, h * 0.45, d * 0.45);
     const geo = r > 0.004 ? roundedBox(w, h, d, r, 1) : shared(`b${w.toFixed(3)}_${h.toFixed(3)}_${d.toFixed(3)}`, () => new THREE.BoxGeometry(w, h, d));
     return this.add(geo, color, { ...t, x, y, z });
   }

@@ -136,6 +136,8 @@ export function createNpcs(ctx, actors) {
     npc._applyMarker = applyMarker;
     register();
     map.set(id, npc);
+    // visible right away only if it belongs here and is near (the 4 Hz pass refines it)
+    { const pp = playerPos(); const near = p && inPlace(npc) && (!pp || Math.hypot(p.x - pp.x, p.z - pp.z) < VIEW_DIST); human.setVisible(!!near); visT = 0; }
     applyMarker();
     return npc;
   }

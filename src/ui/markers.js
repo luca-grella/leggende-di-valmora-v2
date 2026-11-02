@@ -54,8 +54,11 @@ export function createMarkers(ctx, root) {
     if (!map.size || !v) return;
     const rig = ctx.cameraRig;
     const W = ctx.viewport?.width || innerWidth, H = ctx.viewport?.height || innerHeight;
-    for (const m of map.values()) {
+    // close-ups (dialogue, scenes, battles): only the transient alert markers stay, NPC bubbles would float in the shot
+    const closeUp = !!rig && rig.mode !== 'explore' && rig.mode !== 'release' && !!ctx.busy?.is?.();
+    for (const [id, m] of map) {
       const t = m.target;
+      if (closeUp && id !== 'encounter' && !String(id).startsWith('spot')) { hide(m); continue; }
       if (t.isObject3D) {
         if (!t.parent && t.type !== 'Scene') { hide(m); continue; }
         t.updateWorldMatrix?.(true, false);

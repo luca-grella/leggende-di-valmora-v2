@@ -391,7 +391,7 @@
 .sm-row { display: flex; align-items: center; gap: 8px; }
 .sm-row .bar { flex: 1; }
 .sm-l { flex: none; min-width: 64px; font-size: 13px; font-weight: 900; color: var(--ink-2); }
-.sm-v { flex: none; min-width: 60px; text-align: right; font-weight: 800; font-size: 13px; }
+.sm-v { flex: none; min-width: 60px; white-space: nowrap; text-align: right; font-weight: 800; font-size: 13px; }
 .sm-cols { display: grid; grid-template-columns: 1fr; gap: 14px; }
 @media (orientation: landscape), (min-width: 760px) { .sm-cols { grid-template-columns: 1fr 1fr; } }
 .sm-stats { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 18px; background: #fff; box-shadow: 0 0 0 2px var(--panel-line-2); }
@@ -409,3 +409,31 @@
 .sm-evo { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-weight: 800; color: var(--lilac-d); }
 .sm-evo .ic { width: 20px; height: 20px; }
 .sm-caught { margin: 0; font-size: 13px; font-weight: 700; }
+@media (orientation: portrait) and (max-width: 759px) { .mgrid .mtile:last-child:nth-child(3n+1) { grid-column: 2; } }
+@media (orientation: landscape), (min-width: 760px) { .mgrid .mtile:last-child:nth-child(4n+3) { grid-column: 3 / span 2; } }
+.tab { min-width: 0; white-space: nowrap; }
+.tab .tab-n.zero { display: none; }
+@media (max-width: 430px) { .tabs { gap: 3px; } .tab { padding: 0 6px; font-size: 14px; gap: 4px; } .tab .tab-ic .ic { width: 17px; height: 17px; } }
+.st-title { display: block; }
+.st-badge { display: inline-block; vertical-align: 2px; margin-left: 4px; }
+/* landscape phones: compact chrome so the content fits 390px of height */
+@media (orientation: landscape) and (max-height: 520px) {
+  .sh-head { min-height: 50px; padding: 6px 10px 10px; }
+  .sh-hic, .sh-x { width: 36px; height: 36px; }
+  .sh-hic .ic { width: 24px; height: 24px; }
+  .sh-title { font-size: 19px; }
+  .sh-body { padding: 12px 14px 14px; }
+  .tcard { padding: 8px 12px; margin-bottom: 10px; }
+  .tc-ball, .tc-ball .ic { width: 38px; height: 38px; }
+  .mgrid { grid-template-columns: repeat(7, 1fr); gap: 8px 6px; }
+  .mgrid .mtile:last-child { grid-column: auto !important; }
+  .mt-disc { width: 64px; height: 64px; border-width: 3px; }
+  .mt-ic .ic { width: 38px; height: 38px; }
+  .mt-label { font-size: 13.5px; }
+  .tabs { margin-bottom: 10px; }
+  .tab { min-height: 34px; }
+  .sm-stage { height: 170px; min-width: 200px; }
+  .sm-stage .thumb.big { width: 140px; height: 140px; }
+}
+.thumb .th-ph { position: absolute; left: 25%; top: 25%; }
+.thumb img { position: relative; }

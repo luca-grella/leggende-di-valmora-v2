@@ -133,15 +133,16 @@ export function buildArena(ctx, at, { grass = false, gap = GAP } = {}) {
     const mat = ctx.toon.mat('#ffffff', { vertexColors: true });
     const rng = ctx.math?.rng ? ctx.math.rng(Math.floor(at.x * 13 + at.z * 7)) : Math.random;
     tuftData = [];
-    const R0 = gap * 0.5 + 1.6;
-    for (let i = 0; i < 46; i++) {
+    const R0 = gap * 0.5 + 2.2;
+    for (let i = 0; i < 70 && (tuftData.length < 44); i++) {
       const a = rng() * Math.PI * 2;
-      // ellipse around the arena, left open towards the camera side and the player
-      const rx = R0 + 0.6 + rng() * 2.2, rz = R0 * 1.25 + rng() * 2.2;
+      // ellipse around the arena; the half behind the ally stays open (that's where the cameras are)
+      const rx = R0 + 0.8 + rng() * 2.4, rz = R0 * 1.15 + rng() * 2.4;
       const lx = Math.cos(a) * rx, lz = Math.sin(a) * rz;
+      if (lz < -gap * 0.25 && Math.abs(lx) < R0 + 2.5) continue;
       const p = center.clone().addScaledVector(right, lx).addScaledVector(fwd, lz);
-      if (p.distanceTo(new THREE.Vector3(slots.player.x, p.y, slots.player.z)) < 1.6) continue;
-      tuftData.push({ x: p.x, y: ground(p.x, p.z) - 0.04, z: p.z, s: 0.8 + rng() * 0.7, ry: rng() * 6.28, ph: rng() * 6.28 });
+      if (p.distanceTo(new THREE.Vector3(slots.player.x, p.y, slots.player.z)) < 2.2) continue;
+      tuftData.push({ x: p.x, y: ground(p.x, p.z) - 0.04, z: p.z, s: 0.7 + rng() * 0.6, ry: rng() * 6.28, ph: rng() * 6.28 });
     }
     tufts = new THREE.InstancedMesh(geo, mat, tuftData.length);
     tufts.name = 'arena-tufts'; tufts.receiveShadow = true; tufts.frustumCulled = false;

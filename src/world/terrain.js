@@ -111,7 +111,7 @@ export function* buildTerrainGen(ctx, island) {
   function masks(x, z, h, slope, out, rd) {
     let path = 0, plaza = 0, shade = 0, grassBoost = 0;
     if (rd < 3) shade = (1 - smoothstep(0, 2.5, Math.max(0, rd))) * 0.22;                 // worn verge (ribbons draw the paths)
-    for (const p of allPatches) {
+    if (rd < 16) for (const p of allPatches) {
       const dx = x - p.x, dz = z - p.z;
       if (dx * dx + dz * dz > (p.rx + 2) ** 2) continue;
       const u = dx * p.sa + dz * p.ca, v = dx * p.ca - dz * p.sa;

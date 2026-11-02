@@ -58,7 +58,7 @@ export function normalizeLook(raw = {}) {
 /** Named presets. Romance women: distinct silhouettes (hair style/colour), outfits and skin tones. */
 export const LOOKS = {
   // ---- player & story -------------------------------------------------------------------------
-  player: { sex: 'm', age: 'adult', height: 1, build: 0.45, skin: '#f1c7a3', eyes: '#3a2a1a', hair: { style: 'short', color: '#3b2a20' },
+  player: { sex: 'm', age: 'adult', height: 1, build: 0.45, skin: '#f1c7a3', eyes: '#3a2a1a', hair: { style: 'short', color: '#5a3a24' },
     top: { style: 'tshirt', color: '#2fa8a0', accent: '#ffd23f' }, bottom: { style: 'shorts', color: '#2c3a5a' },
     shoes: { style: 'sneakers', color: '#e8674a' }, hat: { style: 'cap', color: '#e8674a' }, accessory: 'backpack', accessoryColor: '#f5b83d' },
   quercia: { sex: 'f', age: 'adult', height: 1.04, build: 0.45, skin: '#f1c7a3', eyes: '#2e8b6a', hair: { style: 'bun', color: '#8d4a24' },

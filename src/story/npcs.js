@@ -88,12 +88,17 @@ export function createRoster(ctx) {
     try {
       const npc = actors.spawnNpc({
         id: def.id, name: def.name, look: def.look, at, wander: def.wander ?? null, schedule: def.schedule,
-        talk: def.talk ? () => runTalk(def) : undefined, label: def.label || 'Parla', icon: def.icon,
+        talk: def.talk ? () => runTalk(def) : undefined, label: labelOf(def) || 'Parla', icon: def.icon,
         marker: null, interior: interior || undefined,
       });
       if (npc) { npc.storyDef = def; def.onSpawn?.(ctx, npc); }
       return npc || null;
     } catch (e) { console.warn('[story] spawnNpc failed', def.id, e); return null; }
+  }
+
+  function labelOf(def) {
+    if (typeof def.label !== 'function') return def.label;
+    try { return def.label(ctx); } catch { return 'Parla'; }
   }
 
   function despawn(id) {
@@ -136,6 +141,9 @@ export function createRoster(ctx) {
       island = K().playerIsland();
       for (const def of defs.values()) {
         let want = (def.always || !islandOf(def) || islandOf(def) === island);
+        // interior residents only exist while you are in their room (saves a skinned mesh per clerk/nurse)
+        const intr = def.interior || (typeof def.at === 'string' && isInteriorPoi(def.at) ? interiorOf(def.at) : null);
+        if (want && intr && ctx.world?.enterInterior && ctx.world.interior !== intr) want = false;
         if (want && def.present) { try { want = !!def.present(ctx); } catch (e) { console.warn('[story] present()', def.id, e); want = false; } }
         const has = live.has(def.id);
         if (want && !has) { const npc = spawn(def); if (npc) live.set(def.id, npc); }
@@ -150,6 +158,10 @@ export function createRoster(ctx) {
         let icon = null;
         try { icon = def?.marker?.(ctx) || null; } catch (e) { console.warn('[story] marker()', id, e); }
         setMarker(id, npc, icon);
+        if (typeof def?.label === 'function') {
+          const l = labelOf(def);
+          if (npc._storyLabel !== l) { npc._storyLabel = l; try { npc.setLabel?.(l); } catch { /* optional */ } }
+        }
       }
     },
     /** Move an NPC back to its POI (after a walk-up or a chase). */
@@ -164,6 +176,8 @@ export function createRoster(ctx) {
   };
 
   for (const e of RESYNC_EVENTS) ctx.bus.on(e, () => roster.queue());
+  ctx.bus.on('interior:enter', () => roster.sync());
+  ctx.bus.on('interior:exit', () => roster.sync());
   ctx.bus.on('area:enter', ({ island: isl } = {}) => { if (!isl || isl !== island) roster.queue(); else roster.refresh(); });
   return roster;
 }
