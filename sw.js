@@ -1,6 +1,6 @@
 // Leggende di Valmora 2 — service worker: offline precache, cache-first, update on reload.
 // Bump CACHE on every release (and run `node tools/sw-assets.mjs` if files were added/removed).
-const CACHE = 'leggende-di-valmora-v2-r4';
+const CACHE = 'leggende-di-valmora-v2-r5';
 importScripts('./sw-assets.js'); // defines self.SW_ASSETS (generated list)
 
 self.addEventListener('install', event => {

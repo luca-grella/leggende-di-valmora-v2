@@ -39,7 +39,7 @@ export function createInput({ bus, getYaw = () => 0, save = null }) {
     move: { x: 0, z: 0, mag: 0 },
     /** Raw screen-space move (x right, y up), −1..1. */
     moveScreen: { x: 0, y: 0 },
-    /** Run: Shift held, R toggle, Corri button, gamepad shoulder, joystick pushed to the edge (or auto-run setting). */
+    /** Run: Shift held, R toggle, Corri button, gamepad shoulder (or auto-run setting). */
     run: false,
     /** false → move is zero (presses still work). */
     enabled: true,
@@ -94,7 +94,8 @@ export function createInput({ bus, getYaw = () => 0, save = null }) {
 
       const shift = keys.has('ShiftLeft') || keys.has('ShiftRight');
       const autoRun = !!save?.state?.settings?.autoRun;
-      let run = isHeld('run') || runToggle || (analog && jm > 0.02 && Math.hypot(joy.x, joy.y) >= 0.95);
+      // joystick at the edge no longer runs by itself: on a phone the thumb is almost always at the edge
+      let run = isHeld('run') || runToggle;
       if (!analog) run = run || (autoRun ? !shift : shift);
       else if (autoRun && mag >= 0.7) run = true;
       input.run = run;
