@@ -1,0 +1,39 @@
+PROVA REALISTICA - crediti e licenze
+=====================================
+
+Personaggi (assets/lei.glb, assets/lui.glb)
+-------------------------------------------
+Costruiti per questa prova con uno script Node (nessun Blender) a partire dai dati
+MakeHuman / MPFB, tutti rilasciati in CC0 1.0 (pubblico dominio):
+- Mesh base hm08, target di forma (genere, eta, etnia, proporzioni, altezza),
+  target di espressione (sorriso, chiusura occhi), rig "mixamo" e relativi pesi:
+  dati inclusi nell'estensione MPFB 2.0.18
+  https://extensions.blender.org/add-ons/mpfb/  (codice GPL-3, asset CC0)
+- Vestiti female_casualsuit01 e male_casualsuit02, capelli ponytail01 e short02,
+  occhi high-poly, sopracciglia eyebrow001, ciglia eyelashes01:
+  "MakeHuman system assets" (CC0)
+  https://static.makehumancommunity.org/assets/assetpacks/makehuman_system_assets.html
+- Pelle di lei: "toigo_light_skin_with_natural_makeup" dal pacchetto Skins 01 (CC0)
+  https://static.makehumancommunity.org/assets/assetpacks/skins01.html
+- Pelle di lui: "mindfront_aksel_skin" dal pacchetto Skins 02 (CC0)
+  https://static.makehumancommunity.org/assets/assetpacks/skins02.html
+Copyright originale MakeHuman: Data Collection AB, Joel Palmius, Jonas Hauquier
+e gli autori dei pacchetti (toigo, Mindfront), rilasciato CC0.
+Download diretti, senza account.
+
+Animazione
+----------
+Posa e movimento procedurali (IK a due ossa per braccia e gambe, CCD sulla
+schiena per il bacio, respiro, sguardo e sbattere di palpebre), scritti a mano
+in scene.js. Nessun file di motion capture.
+
+Ambiente
+--------
+- Pavimento: "Weathered Planks", parete: "Painted Plaster Wall" - Poly Haven, CC0
+  https://polyhaven.com/textures
+- Divano, lampade, tavolino, quadro e tappeto: geometria generata nel codice.
+
+Codice
+------
+- three.js r160 (MIT) da ../vendor/, piu GLTFLoader.js e RoundedBoxGeometry.js
+  copiati da three@0.160.0/examples/jsm (MIT, (c) 2010-2023 three.js authors).
