@@ -1,0 +1,14 @@
+{ "name": "Lui",
+  "targets": [["macrodetails/caucasian-male-young",0.8],["macrodetails/african-male-young",0.1],["macrodetails/asian-male-young",0.1],
+              ["macrodetails/proportions/male-young-averagemuscle-averageweight-idealproportions",0.6],
+              ["macrodetails/height/male-young-averagemuscle-averageweight-maxheight",0.15]],
+  "morphs": [ {"name":"smile","parts":[["expression/units/caucasian/mouth-corner-puller",0.7],["expression/units/caucasian/eye-left-slit",0.2],["expression/units/caucasian/eye-right-slit",0.2]]},
+              {"name":"blink","parts":[["expression/units/caucasian/eye-left-closure",1],["expression/units/caucasian/eye-right-closure",1]]} ],
+  "skin": "skins/mindfront_aksel_skin/mindfront_aksel_skin.mhmat",
+  "proxies": [
+    {"name":"eyes","mhclo":"eyes/high-poly/high-poly.mhclo","mhmat":"eyes/materials/bluegreen.mhmat","tex":512,"rough":0.15,"normal":false},
+    {"name":"eyebrows","mhclo":"eyebrows/eyebrow001/eyebrow001.mhclo","tex":512,"alpha":"MASK","cutoff":0.35,"double":true,"normal":false},
+    {"name":"eyelashes","mhclo":"eyelashes/eyelashes01/eyelashes01.mhclo","tex":512,"alpha":"MASK","cutoff":0.4,"double":true,"normal":false},
+    {"name":"clothes","mhclo":"clothes/male_casualsuit02/male_casualsuit02.mhclo","tex":1024,"rough":0.9},
+    {"name":"hair","mhclo":"hair/short02/short02.mhclo","tex":1024,"alpha":"MASK","cutoff":0.45,"double":true,"rough":0.6,"normal":false}
+  ] }

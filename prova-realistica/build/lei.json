@@ -1,0 +1,13 @@
+{ "name": "Lei",
+  "targets": [["macrodetails/caucasian-female-young",0.8],["macrodetails/african-female-young",0.1],["macrodetails/asian-female-young",0.1],
+              ["macrodetails/proportions/female-young-averagemuscle-averageweight-idealproportions",0.6]],
+  "morphs": [ {"name":"smile","parts":[["expression/units/caucasian/mouth-corner-puller",0.75],["expression/units/caucasian/eye-left-slit",0.2],["expression/units/caucasian/eye-right-slit",0.2]]},
+              {"name":"blink","parts":[["expression/units/caucasian/eye-left-closure",1],["expression/units/caucasian/eye-right-closure",1]]} ],
+  "skin": "skins/toigo_light_skin_with_natural_makeup/toigo_light_skin_with_natural_makeup.mhmat",
+  "proxies": [
+    {"name":"eyes","mhclo":"eyes/high-poly/high-poly.mhclo","tex":512,"rough":0.15,"normal":false},
+    {"name":"eyebrows","mhclo":"eyebrows/eyebrow001/eyebrow001.mhclo","tex":512,"alpha":"MASK","cutoff":0.35,"double":true,"normal":false},
+    {"name":"eyelashes","mhclo":"eyelashes/eyelashes01/eyelashes01.mhclo","tex":512,"alpha":"MASK","cutoff":0.4,"double":true,"normal":false},
+    {"name":"clothes","mhclo":"clothes/female_casualsuit01/female_casualsuit01.mhclo","tex":1024,"rough":0.9},
+    {"name":"hair","mhclo":"hair/ponytail01/ponytail01.mhclo","tex":1024,"alpha":"MASK","cutoff":0.45,"double":true,"rough":0.6,"normal":false}
+  ] }

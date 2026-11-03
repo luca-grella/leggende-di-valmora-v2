@@ -138,7 +138,7 @@ function prepCharacter(gltf) {
       meshes.push(o); o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true;
       const m = o.material; m.envMapIntensity = 0.6;
       if (o.name === 'hair' || o.name === 'eyebrows' || o.name === 'eyelashes') { m.alphaToCoverage = true; m.side = THREE.DoubleSide; if (o.name !== 'hair') o.castShadow = false; }
-      if (o.name === 'eyes') { m.roughness = 0.12; o.castShadow = false; }
+      if (o.name === 'eyes') { m.roughness = 0.25; m.color.setScalar(0.62); o.castShadow = false; }
       if (o.name === 'body') { m.roughness = 0.52; m.sheen = 0; m.emissive = new THREE.Color(0x2a0d06); m.emissiveIntensity = 0.25; }
     }
   });
@@ -248,6 +248,10 @@ async function load() {
     fore: slab(xMin + (xMax - xMin) * 0.55, xMin + (xMax - xMin) * 0.75),
   };
   footInfo.foreTop = Math.max(...footInfo.fore.map(p => p[1]));
+  footInfo.pts = fp;
+  // surface extent of the foot at a given position along it: side (z) at height y, top (y) at centre line
+  footInfo.sideAt = (x, y, sg) => { const q = fp.filter(p => Math.abs(p[0] - x) < 0.014 && Math.abs(p[1] - y) < 0.016); if (!q.length) return sg > 0 ? footInfo.zMax : footInfo.zMin; const zs = q.map(p => p[2]); return sg > 0 ? Math.max(...zs) : Math.min(...zs); };
+  footInfo.topAt = (x) => { const q = fp.filter(p => Math.abs(p[0] - x) < 0.012 && Math.abs(p[2] - 0.01) < 0.015); return q.length ? Math.max(...q.map(p => p[1])) : footInfo.foreTop; };
   const hp = measure(him, 'LeftHand', 0.6);
   const hy = hp.filter(p => p[0] > 0.02 && p[0] < 0.08).map(p => p[1]).sort((a, b) => a - b);
   palmInfo = { palm: hy[Math.floor(hy.length * 0.9)], back: hy[Math.floor(hy.length * 0.1)], len: Math.max(...hp.map(p => p[0])) };
@@ -363,7 +367,7 @@ function poseHim(t) {
   const fi = footInfo; const span = fi.xMax - fi.xMin;
   const footPt = (x, y, z) => F.o.clone().addScaledVector(F.d, x).addScaledVector(Fy, y).addScaledVector(Fz, z);
   // kiss: bend the spine (CCD) so his mouth reaches the top of her forefoot
-  const kissTarget = footPt(fi.xMin + span * 0.66, fi.foreTop + 0.012, 0); dbg('kiss', kissTarget);
+  const kissTarget = footPt(fi.xMin + span * 0.66, fi.topAt(fi.xMin + span * 0.66) + 0.008, 0.01); dbg('kiss', kissTarget);
   const headLook = lerpV(wpos(her.B.Head).add(new V3(0, 0.06, 0)), footPt(fi.xMin + span * 0.5, 0, 0), 1 - TL.hisLookHer(t));
   poseHead(him, headLook, chestUp, 0.6, t);
   if (kiss > 0.001) {
@@ -385,12 +389,12 @@ function poseHim(t) {
   // hands on her foot: palms on the sides of the foot, fingers wrapping over the top, thumbs on the sole
   const m = massage * hands;
   const slideL = Math.sin(t * 2.3) * 0.012 * m, slideR = Math.sin(t * 2.3 + 1.9) * 0.012 * m;
-  const gap = 0.006;
+  const gap = 0.002;
   const sides = { Left: fi.zMax, Right: fi.zMin };          // his left hand on +z of her foot frame
   for (const [s, sg] of [['Left', 1], ['Right', -1]]) {
-    const zSide = sides[s] + sg * (gap + 0.002);
     const xAlong = fi.xMin + span * (s === 'Left' ? 0.22 : 0.42) + (s === 'Left' ? slideL : slideR) - 0.03 * TL.lift(t);
     const yMid = fi.soleY * 0.55 + fi.topY * 0.2;
+    const zSide = fi.sideAt(xAlong, yMid, sg) + sg * gap;
     const contact = footPt(xAlong, yMid, zSide); dbg(s, contact);
     const palmN = Fz.clone().multiplyScalar(-sg).addScaledVector(Fy, 0.25).normalize();   // pointing into the foot
     const handDir = Fy.clone().addScaledVector(F.d, -0.15 * sg).addScaledVector(Fz, -0.1 * sg).normalize(); // towards her (over the top)
@@ -475,7 +479,9 @@ function cameraAt(t) {
   const yaw = (a.yaw + (b.yaw - a.yaw) * k) * (camera.aspect < 1 ? 0.55 : 1), pitch = a.pitch + (b.pitch - a.pitch) * k, fit = a.fit + (b.fit - a.fit) * k;
   const at = a.at.clone().lerp(b.at, k);
   const aspect = camera.aspect; const vfov = THREE.MathUtils.degToRad(camera.fov);
-  const halfW = 1.05 * fit, halfH = 0.62 * fit;             // area to keep in frame (both bodies + her feet)
+  const portrait = camera.aspect < 1;
+  if (portrait) at.x -= 0.12;
+  const halfW = portrait ? 0.98 * Math.max(fit, 0.9) : 1.05 * fit, halfH = 0.62 * fit;             // area to keep in frame (both bodies + her feet)
   const dW = halfW / Math.tan(Math.atan(Math.tan(vfov / 2) * aspect)); const dH = halfH / Math.tan(vfov / 2);
   const dist = Math.max(dW, dH) + 0.35;
   const dir = new V3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
@@ -514,7 +520,7 @@ document.getElementById('credlink').onclick = async (e) => { e.preventDefault();
 document.getElementById('credclose').onclick = () => { credits.style.display = 'none'; };
 
 // debug hook for headless capture
-window.__scene = { ready: null, seek(t) { frozen = true; simT = t; update(t); renderer.render(scene, camera); return t; }, play() { frozen = false; t0 = performance.now() - simT * 1000; }, info: () => ({ hands: him && ['Left','Right'].map(s => [wpos(him.B[s + 'Hand']).toArray().map(v => +v.toFixed(3)), DBG && DBG[s] && DBG[s].position.toArray().map(v => +v.toFixed(3))]), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, palmInfo, feet: footInfo && { soleY: footInfo.soleY, topY: footInfo.topY, foreTop: footInfo.foreTop } }) };
+window.__scene = { ready: null, seek(t) { frozen = true; simT = t; update(t); renderer.render(scene, camera); return t; }, heads: () => [wpos(her.B.Head).toArray(), wpos(him.B.Head).toArray()], play() { frozen = false; t0 = performance.now() - simT * 1000; }, info: () => ({ hands: him && ['Left','Right'].map(s => [wpos(him.B[s + 'Hand']).toArray().map(v => +v.toFixed(3)), DBG && DBG[s] && DBG[s].position.toArray().map(v => +v.toFixed(3))]), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, palmInfo, feet: footInfo && { soleY: footInfo.soleY, topY: footInfo.topY, foreTop: footInfo.foreTop } }) };
 window.__scene.ready = load().then(() => {
   // pre-pose once before the first frame so nothing pops
   update(0); renderer.compile(scene, camera);
