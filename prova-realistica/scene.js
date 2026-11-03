@@ -155,9 +155,35 @@ function prepCharacter(gltf) {
     b.userData.rest = new Q();
   }
   for (const b of Object.values(B)) for (const c of b.children) if (c.isBone) c.userData.seg = c.userData.h0.distanceTo(b.userData.h0);
+  const perp = (v, d) => v.clone().sub(d.clone().multiplyScalar(v.dot(d))).normalize();
+  for (const s of ['Left', 'Right']) {
+    const a = B[s + 'Arm'].userData, f = B[s + 'ForeArm'].userData, h = B[s + 'Hand'].userData;
+    a.up0 = perp(f.dir0.clone().negate(), a.dir0);            // elbow tip, seen from the upper arm
+    f.up0 = perp(a.dir0, f.dir0);                              // elbow tip, seen from the forearm
+    h.up0 = palmNormal(meshes.find(m => m.name === 'body'), B, s);  // palm normal (rest)
+    h.palm0 = h.up0.clone();
+    B[s + 'Shoulder'].userData.up0 = new V3(0, 0, 1);
+  }
   scene.add(root);
   const morph = (name, v) => { for (const m of meshes) { const i = m.morphTargetDictionary?.[name]; if (i !== undefined) m.morphTargetInfluences[i] = v; } };
   return { root, B, meshes, morph };
+}
+
+// palm normal of the rest hand: flattest axis of the hand vertices, oriented towards the finger curl
+function palmNormal(body, B, s) {
+  const g = body.geometry; const bi = body.skeleton.bones.findIndex(b => b.name === s + 'Hand');
+  const pos = g.attributes.position, sk = g.attributes.skinIndex, sw = g.attributes.skinWeight; const pts = [];
+  for (let i = 0; i < pos.count; i++) { let w = 0; for (let k = 0; k < 4; k++) if (sk.getComponent(i, k) === bi) w += sw.getComponent(i, k); if (w > 0.6) pts.push(new V3().fromBufferAttribute(pos, i)); }
+  const c = pts.reduce((a, p) => a.add(p), new V3()).multiplyScalar(1 / pts.length);
+  const C = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  for (const p of pts) { const d = p.clone().sub(c).toArray(); for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) C[i * 3 + j] += d[i] * d[j]; }
+  const tr = C[0] + C[4] + C[8]; const M = C.map((v, i) => (i % 4 === 0 ? tr : 0) - v);   // largest eigvec of (tr*I - C) = smallest of C
+  let v = new V3(0.3, 0.5, 0.7); for (let it = 0; it < 60; it++) { v = new V3(M[0] * v.x + M[1] * v.y + M[2] * v.z, M[3] * v.x + M[4] * v.y + M[5] * v.z, M[6] * v.x + M[7] * v.y + M[8] * v.z).normalize(); }
+  const hd = B[s + 'Hand'].userData.dir0, id = B[s + 'HandMiddle1'].userData.dir0;
+  const curl = id.clone().sub(hd.clone().multiplyScalar(id.dot(hd)));
+  const th = B[s + 'HandThumb1'].userData.h0.clone().sub(c);
+  if (curl.lengthSq() > 1e-4 ? v.dot(curl) < 0 : v.dot(th) < 0) v.negate();
+  return v.sub(hd.clone().multiplyScalar(v.dot(hd))).normalize();
 }
 
 // ---------------------------------------------------------------- pose helpers
@@ -223,7 +249,8 @@ async function load() {
   };
   footInfo.foreTop = Math.max(...footInfo.fore.map(p => p[1]));
   const hp = measure(him, 'LeftHand', 0.6);
-  palmInfo = { palm: Math.max(...hp.map(p => p[1])), back: Math.min(...hp.map(p => p[1])), len: Math.max(...hp.map(p => p[0])) };
+  const hy = hp.filter(p => p[0] > 0.02 && p[0] < 0.08).map(p => p[1]).sort((a, b) => a - b);
+  palmInfo = { palm: hy[Math.floor(hy.length * 0.9)], back: hy[Math.floor(hy.length * 0.1)], len: Math.max(...hp.map(p => p[0])) };
   ready = true;
 }
 
@@ -254,7 +281,7 @@ function poseHer(t) {
   const rightAnkle = lap.clone().addScaledVector(gF, 0.30).addScaledVector(gL, -0.03).add(new V3(0, 0.165, 0));
   const leftAnkle = lap.clone().addScaledVector(gF, 0.08).addScaledVector(gL, -0.16).add(new V3(0, 0.15, 0));
   // offered foot: lifted, pointed, towards his face
-  const offer = lap.clone().addScaledVector(gF, 0.3).addScaledVector(gL, -0.05).add(new V3(0, 0.33, 0));
+  const offer = lap.clone().addScaledVector(gF, 0.34).addScaledVector(gL, -0.02).add(new V3(0, 0.40, 0));
   rightAnkle.lerp(offer, lift);
   rightAnkle.y += noise(t, 1) * 0.004; leftAnkle.y += noise(t, 2) * 0.003;
   // hips: slide so the legs are slightly bent
@@ -336,17 +363,17 @@ function poseHim(t) {
   const fi = footInfo; const span = fi.xMax - fi.xMin;
   const footPt = (x, y, z) => F.o.clone().addScaledVector(F.d, x).addScaledVector(Fy, y).addScaledVector(Fz, z);
   // kiss: bend the spine (CCD) so his mouth reaches the top of her forefoot
-  const kissTarget = footPt(fi.xMin + span * 0.66, fi.foreTop + 0.012, 0);
+  const kissTarget = footPt(fi.xMin + span * 0.66, fi.foreTop + 0.012, 0); dbg('kiss', kissTarget);
   const headLook = lerpV(wpos(her.B.Head).add(new V3(0, 0.06, 0)), footPt(fi.xMin + span * 0.5, 0, 0), 1 - TL.hisLookHer(t));
   poseHead(him, headLook, chestUp, 0.6, t);
   if (kiss > 0.001) {
     const mouth = () => { const h = boneFrame(B.Head); const fz = h.u; return h.o.clone().addScaledVector(h.d, 0.045).addScaledVector(fz, 0.105); };
     const save = [B.Spine, B.Spine1, B.Spine2, B.Neck, B.Head].map(b => b.quaternion.clone());
-    for (let it = 0; it < 10; it++) {
-      for (const j of [B.Neck, B.Spine2, B.Spine1, B.Spine]) {
+    for (let it = 0; it < 6; it++) {
+      for (const j of [B.Neck, B.Spine2, B.Spine1]) {
         const J = wpos(j); const e = mouth().sub(J).normalize(); const tg = kissTarget.clone().sub(J).normalize();
         const q = new Q().setFromUnitVectors(e, tg); const ang = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
-        const lim = j === B.Neck ? 0.25 : 0.12; if (ang > lim) q.slerp(new Q(), 1 - lim / ang);
+        const lim = j === B.Neck ? 0.12 : 0.05; if (ang > lim) q.slerp(new Q(), 1 - lim / ang);
         setWorld(j, q.multiply(wquat(j)));
         poseHead(him, kissTarget, null, 1, t, true);
       }
@@ -362,9 +389,9 @@ function poseHim(t) {
   const sides = { Left: fi.zMax, Right: fi.zMin };          // his left hand on +z of her foot frame
   for (const [s, sg] of [['Left', 1], ['Right', -1]]) {
     const zSide = sides[s] + sg * (gap + 0.002);
-    const xAlong = fi.xMin + span * (s === 'Left' ? 0.46 : 0.3) + (s === 'Left' ? slideL : slideR) - 0.03 * TL.lift(t);
+    const xAlong = fi.xMin + span * (s === 'Left' ? 0.22 : 0.42) + (s === 'Left' ? slideL : slideR) - 0.03 * TL.lift(t);
     const yMid = fi.soleY * 0.55 + fi.topY * 0.2;
-    const contact = footPt(xAlong, yMid, zSide);
+    const contact = footPt(xAlong, yMid, zSide); dbg(s, contact);
     const palmN = Fz.clone().multiplyScalar(-sg).addScaledVector(Fy, 0.25).normalize();   // pointing into the foot
     const handDir = Fy.clone().addScaledVector(F.d, -0.15 * sg).addScaledVector(Fz, -0.1 * sg).normalize(); // towards her (over the top)
     // wrist position from the palm contact: palm centre sits ~0.045 along the hand and palmInfo.palm below the bone
@@ -376,8 +403,8 @@ function poseHim(t) {
     const pn = new V3(0, -1, 0).lerp(palmN, hands).normalize(); const hdd = g.clone().lerp(hd, hands).normalize();
     armIK(him, s, wrist, pn, hdd, L.clone().multiplyScalar(sg).add(new V3(0, -0.6, 0)).addScaledVector(g, -0.4), 0.4);
     // fingers: curl around the top; thumb pressing on the sole in small circles
-    const curl = 0.35 + 0.25 * hands + Math.sin(t * 4.6 + sg) * 0.08 * m;
-    fingers(him, s, curl, 0.25 + Math.sin(t * 4.6 + sg * 1.3) * 0.25 * m);
+    const curl = 0.22 + 0.2 * hands + Math.sin(t * 4.6 + sg) * 0.06 * m;
+    fingers(him, s, curl, 0.15 + Math.sin(t * 4.6 + sg * 1.3) * 0.2 * m);
   }
   him.morph('smile', TL.hisSmile(t));
   him.morph('blink', Math.max(blink(t, 1.7), kiss * 0.8));
@@ -408,47 +435,47 @@ function aimEyes(ch, target) {
 }
 function armIK(ch, s, wrist, palmN, handDir, pole, twist) {
   const B = ch.B;
-  aim(B[s + 'Shoulder'], B[s + 'Shoulder'].userData.dir0.clone().add(new V3(0, -0.08, 0.05)).normalize().applyQuaternion(wquat(B.Spine2)), new V3(0, 0, 1).applyQuaternion(wquat(B.Spine2)));
-  const upB = (dirF, P) => {
-    // share some wrist twist with the forearm (no twist bones in this rig)
-    const q = aimQ(B[s + 'Hand'], handDir, palmN);
-    const rest = aimQ(B[s + 'ForeArm'], dirF, P);
-    const palmLocal = new V3(0, -1, 0).applyQuaternion(frameQ(B[s + 'ForeArm'].userData.dir0, B[s + 'ForeArm'].userData.up0).invert());
-    const sgn = Math.sign(palmLocal.z) || 1;
-    const want = new V3().crossVectors(palmN.clone().multiplyScalar(sgn), dirF).normalize();
-    return P.clone().lerp(want, twist).normalize();
-  };
-  ik2(B[s + 'Arm'], B[s + 'ForeArm'], B[s + 'Hand'], wrist, pole, upB);
-  aim(B[s + 'Hand'], handDir, palmN);
+  const sq = wquat(B.Spine2); const sh = B[s + 'Shoulder'];
+  aim(sh, sh.userData.dir0.clone().add(new V3(0, -0.04, 0.03)).normalize().applyQuaternion(sq), sh.userData.up0.clone().applyQuaternion(sq));
+  ik2(B[s + 'Arm'], B[s + 'ForeArm'], B[s + 'Hand'], wrist, pole);
+  // no twist bones in this rig: give part of the wrist twist to the forearm
+  const fa = B[s + 'ForeArm']; const qa = wquat(fa); const qh = aimQ(B[s + 'Hand'], handDir, palmN);
+  const delta = qh.clone().multiply(qa.clone().invert()); const ax = fa.userData.dir0.clone().applyQuaternion(qa);
+  const r = new V3(delta.x, delta.y, delta.z); const pr = ax.multiplyScalar(r.dot(ax));
+  const tw = new Q(pr.x, pr.y, pr.z, delta.w).normalize(); if (tw.w < 0) { tw.x *= -1; tw.y *= -1; tw.z *= -1; tw.w *= -1; }
+  setWorld(fa, new Q().slerp(tw, twist ?? 0.5).multiply(qa));
+  setWorld(B[s + 'Hand'], qh);
 }
 function fingers(ch, s, curl, thumb) {
-  const sg = s === 'Left' ? -1 : 1; const B = ch.B;
+  const B = ch.B; const pn = B[s + 'Hand'].userData.palm0;
   for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) {
-    const k = f === 'Index' ? 0.85 : f === 'Pinky' ? 1.15 : 1;
-    for (let i = 1; i <= 3; i++) { const b = B[s + 'Hand' + f + i]; if (!b) continue; b.quaternion.setFromAxisAngle(new V3(0, 0, 1), sg * curl * k * (i === 1 ? 0.8 : 1.1)); }
+    const k = f === 'Index' ? 0.8 : f === 'Pinky' ? 1.15 : 1;
+    for (let i = 1; i <= 3; i++) { const b = B[s + 'Hand' + f + i]; if (!b) continue; const ax = new V3().crossVectors(b.userData.dir0, pn).normalize(); b.quaternion.setFromAxisAngle(ax, curl * k * (i === 1 ? 0.7 : 1.0)); }
   }
-  for (let i = 1; i <= 3; i++) { const b = B[s + 'HandThumb' + i]; if (!b) continue; b.quaternion.setFromAxisAngle(new V3(0, 1, 0), -sg * (i === 1 ? 0.25 : 0.1 + thumb * 0.4)); }
+  for (let i = 1; i <= 3; i++) { const b = B[s + 'HandThumb' + i]; if (!b) continue; const ax = new V3().crossVectors(b.userData.dir0, pn).normalize(); b.quaternion.setFromAxisAngle(ax, i === 1 ? 0.1 : 0.1 + thumb * 0.5); }
   B[s + 'Hand'].updateMatrixWorld(true);
 }
+const DBG = params.has('dbg') ? {} : null;
+function dbg(name, p) { if (!DBG) return; if (!DBG[name]) { DBG[name] = new THREE.Mesh(new THREE.SphereGeometry(0.008), new THREE.MeshBasicMaterial({ color: name === 'kiss' ? 0x00ff00 : 0xff0000, depthTest: false })); DBG[name].renderOrder = 9; scene.add(DBG[name]); } DBG[name].position.copy(p); }
 function blink(t, seed) { const p = 3.7 + seed; const x = ((t + seed * 2.3) % p) / p; return x > 0.96 ? Math.sin((x - 0.96) / 0.04 * Math.PI) : 0; }
 
 // ---------------------------------------------------------------- camera
 // three gentle moves; distance is solved so the group fits both in portrait and landscape
 const CAM = [
-  { t: 0, yaw: 0.06, pitch: 0.2, fit: 1.0, at: new V3(-0.05, 0.78, 0.05) },
-  { t: 9, yaw: 0.0, pitch: 0.17, fit: 0.86, at: new V3(0.02, 0.76, 0.08) },
-  { t: 15, yaw: -0.32, pitch: 0.24, fit: 0.78, at: new V3(0.12, 0.78, 0.12) },
-  { t: 23, yaw: -0.3, pitch: 0.22, fit: 0.8, at: new V3(0.08, 0.82, 0.08) },
-  { t: 28, yaw: 0.22, pitch: 0.16, fit: 0.84, at: new V3(-0.05, 0.84, 0.05) },
-  { t: 36, yaw: 0.26, pitch: 0.17, fit: 0.9, at: new V3(-0.05, 0.84, 0.05) },
+  { t: 0, yaw: 0.06, pitch: 0.2, fit: 1.0, at: new V3(-0.05, 0.86, 0.05) },
+  { t: 9, yaw: 0.0, pitch: 0.17, fit: 0.86, at: new V3(0.02, 0.86, 0.08) },
+  { t: 15, yaw: -0.32, pitch: 0.24, fit: 0.78, at: new V3(0.1, 0.9, 0.12) },
+  { t: 23, yaw: -0.3, pitch: 0.22, fit: 0.8, at: new V3(0.06, 0.92, 0.08) },
+  { t: 28, yaw: 0.22, pitch: 0.16, fit: 0.84, at: new V3(-0.05, 0.9, 0.05) },
+  { t: 36, yaw: 0.26, pitch: 0.17, fit: 0.9, at: new V3(-0.05, 0.9, 0.05) },
 ];
 function cameraAt(t) {
   let i = 0; while (i < CAM.length - 2 && t > CAM[i + 1].t) i++;
   const a = CAM[i], b = CAM[i + 1]; const k = ss(a.t, b.t, t);
-  const yaw = a.yaw + (b.yaw - a.yaw) * k, pitch = a.pitch + (b.pitch - a.pitch) * k, fit = a.fit + (b.fit - a.fit) * k;
+  const yaw = (a.yaw + (b.yaw - a.yaw) * k) * (camera.aspect < 1 ? 0.55 : 1), pitch = a.pitch + (b.pitch - a.pitch) * k, fit = a.fit + (b.fit - a.fit) * k;
   const at = a.at.clone().lerp(b.at, k);
   const aspect = camera.aspect; const vfov = THREE.MathUtils.degToRad(camera.fov);
-  const halfW = 1.05 * fit, halfH = 0.5 * fit;             // area to keep in frame (both bodies + her feet)
+  const halfW = 1.05 * fit, halfH = 0.62 * fit;             // area to keep in frame (both bodies + her feet)
   const dW = halfW / Math.tan(Math.atan(Math.tan(vfov / 2) * aspect)); const dH = halfH / Math.tan(vfov / 2);
   const dist = Math.max(dW, dH) + 0.35;
   const dir = new V3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
@@ -470,6 +497,7 @@ window.addEventListener('resize', resize); resize();
 function update(t) {
   poseHim(t); poseHer(t); poseHim(t);             // second pass: his hands follow her final foot pose
   cameraAt(t);
+  if (window.__cam) { camera.position.fromArray(window.__cam[0]); camera.lookAt(new V3().fromArray(window.__cam[1])); }
   const fl = room.userData.flame; fl.scale.set(1, 1.8 + Math.sin(t * 13) * 0.2, 1); candle.intensity = 0.9 + Math.sin(t * 11) * 0.08 + Math.sin(t * 17) * 0.05;
   fadeEl.style.opacity = TL.fade(t).toFixed(3);
   bar.style.width = (t / DUR * 100).toFixed(2) + '%';
@@ -486,7 +514,7 @@ document.getElementById('credlink').onclick = async (e) => { e.preventDefault();
 document.getElementById('credclose').onclick = () => { credits.style.display = 'none'; };
 
 // debug hook for headless capture
-window.__scene = { ready: null, seek(t) { frozen = true; simT = t; update(t); renderer.render(scene, camera); return t; }, play() { frozen = false; t0 = performance.now() - simT * 1000; }, info: () => ({ calls: renderer.info.render.calls, tris: renderer.info.render.triangles, footInfo, palmInfo }) };
+window.__scene = { ready: null, seek(t) { frozen = true; simT = t; update(t); renderer.render(scene, camera); return t; }, play() { frozen = false; t0 = performance.now() - simT * 1000; }, info: () => ({ hands: him && ['Left','Right'].map(s => [wpos(him.B[s + 'Hand']).toArray().map(v => +v.toFixed(3)), DBG && DBG[s] && DBG[s].position.toArray().map(v => +v.toFixed(3))]), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, palmInfo, feet: footInfo && { soleY: footInfo.soleY, topY: footInfo.topY, foreTop: footInfo.foreTop } }) };
 window.__scene.ready = load().then(() => {
   // pre-pose once before the first frame so nothing pops
   update(0); renderer.compile(scene, camera);
